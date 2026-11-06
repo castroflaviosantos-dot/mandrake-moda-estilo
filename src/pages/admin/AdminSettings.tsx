@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
+import { isSupabaseEnabled } from '@/lib/supabase'
 import { AdminHeader, AdminField, Panel, adminInput } from '@/components/admin/ui'
 import { Button } from '@/components/ui/button'
 import { maskPhone } from '@/lib/format'
@@ -19,9 +20,9 @@ export default function AdminSettings() {
     announcement: state.settings.announcement,
   })
 
-  const save = (e: React.FormEvent) => {
+  const save = async (e: React.FormEvent) => {
     e.preventDefault()
-    updateSettings({
+    await updateSettings({
       storeName: form.storeName,
       whatsapp: form.whatsapp,
       instagram: form.instagram,
@@ -46,14 +47,6 @@ export default function AdminSettings() {
             <AdminField label="Aviso da barra superior" className="sm:col-span-2"><input className={adminInput} value={form.announcement} onChange={(e) => setForm({ ...form, announcement: e.target.value })} /></AdminField>
           </div>
         </Panel>
-        <Panel title="Endereço físico / retirada">
-          <div className="grid gap-3 p-4 sm:grid-cols-2">
-            <AdminField label="Rua" className="sm:col-span-2"><input className={adminInput} value={form.street} onChange={(e) => setForm({ ...form, street: e.target.value })} /></AdminField>
-            <AdminField label="Número"><input className={adminInput} value={form.number} onChange={(e) => setForm({ ...form, number: e.target.value })} /></AdminField>
-            <AdminField label="Bairro"><input className={adminInput} value={form.neighborhood} onChange={(e) => setForm({ ...form, neighborhood: e.target.value })} /></AdminField>
-            <AdminField label="Cidade" className="sm:col-span-2"><input className={adminInput} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} /></AdminField>
-          </div>
-        </Panel>
         <div className="lg:col-span-2"><Button type="submit" className="rounded-sm bg-white px-6 text-black">Salvar configurações</Button></div>
       </form>
 
@@ -62,14 +55,18 @@ export default function AdminSettings() {
           <p className="text-xs text-muted-foreground">
             Checkout preparado para Pix e cartão de crédito com gateway Mercado Pago. Pix e cartão são registrados sem armazenar dados sensíveis; a confirmação deve chegar por webhook assinado do gateway.
           </p>
-          <p className="flex items-center gap-2 text-xs"><span className="size-2 rounded-full bg-amber-400" /> Ambiente demonstrativo — nenhuma cobrança real é processada até a configuração das credenciais.</p>
+          <p className="flex items-center gap-2 text-xs">
+            <span className={isSupabaseEnabled ? 'size-2 rounded-full bg-emerald-400' : 'size-2 rounded-full bg-amber-400'} />
+            {isSupabaseEnabled ? 'Pedidos e catálogo sincronizados com o Supabase.' : 'Modo demonstração: dados apenas neste navegador.'}
+          </p>
+          <p className="text-[11px] text-muted-foreground">Cobrança real fica ativa quando as credenciais do gateway forem aprovadas. Até lá, o pedido é registrado como aguardando pagamento e a equipe confirma manualmente.</p>
         </div>
       </Panel>
 
       <Panel title="Ambiente">
         <div className="flex flex-wrap items-center justify-between gap-3 p-4">
           <p className="max-w-md text-[11px] text-muted-foreground">Restaurar os dados de demonstração (produtos, banners, pedidos e configurações iniciais).</p>
-          <Button variant="outline" size="sm" className="rounded-sm text-[11px] uppercase" onClick={() => { if (confirm('Restaurar dados de demonstração?')) { resetDemo(); toast.success('Demonstração restaurada') } }}>Restaurar demo</Button>
+          <Button variant="outline" size="sm" className="rounded-sm text-[11px] uppercase" onClick={async () => { if (confirm('Restaurar dados de demonstração? Isso sobrescreve os dados atuais da loja.')) { await resetDemo(); toast.success('Demonstração restaurada') } }}>Restaurar demo</Button>
         </div>
       </Panel>
     </div>

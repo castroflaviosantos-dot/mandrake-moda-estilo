@@ -1,28 +1,35 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search } from 'lucide-react'
+import { Loader2, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { OrderDetail } from '@/components/site/OrderStatus'
+import type { Order } from '@/lib/types'
 
 export default function TrackOrder() {
-  const { findOrder } = useStore()
+  const { findOrder, trackOrder } = useStore()
   const [params, setParams] = useSearchParams()
   const [code, setCode] = useState(params.get('codigo') ?? '')
-  const [found, setFound] = useState(() => findOrder(params.get('codigo') ?? '') ?? null)
+  const [found, setFound] = useState<Order | null>(() => findOrder(params.get('codigo') ?? '') ?? null)
   const [tried, setTried] = useState(!!params.get('codigo'))
+  const [loading, setLoading] = useState(false)
 
-  const search = (e: React.FormEvent) => {
+  const search = async (e: React.FormEvent) => {
     e.preventDefault()
-    const order = findOrder(code)
-    setFound(order ?? null)
-    setTried(true)
-    if (order) {
-      setParams({ codigo: order.code })
-      toast.success(`Pedido #${order.code} encontrado`)
-    } else {
-      toast.error('Pedido não encontrado. Confira o número.')
+    setLoading(true)
+    try {
+      const order = (await trackOrder(code)) ?? findOrder(code) ?? null
+      setFound(order)
+      setTried(true)
+      if (order) {
+        setParams({ codigo: order.code })
+        toast.success(`Pedido #${order.code} encontrado`)
+      } else {
+        toast.error('Pedido não encontrado. Confira o número.')
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -41,8 +48,8 @@ export default function TrackOrder() {
           placeholder="Ex.: MDK-0001"
           className="h-11 flex-1 border border-border bg-background px-3 text-sm outline-none focus:border-white/60"
         />
-        <Button type="submit" className="h-11 rounded-sm bg-white px-5 text-[11px] uppercase tracking-[0.14em] text-black hover:bg-white/90">
-          <Search className="size-4" /> Buscar
+        <Button type="submit" disabled={loading} className="h-11 rounded-sm bg-white px-5 text-[11px] uppercase tracking-[0.14em] text-black hover:bg-white/90">
+          {loading ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />} Buscar
         </Button>
       </form>
 

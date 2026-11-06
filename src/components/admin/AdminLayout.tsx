@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { ArrowUpRight, Image as ImageIcon, LayoutDashboard, LogOut, Menu, Package, Settings, ShoppingCart, Store, Tag, Truck, Users, X } from 'lucide-react'
+import { ArrowUpRight, Image as ImageIcon, LayoutDashboard, Loader2, LogOut, Menu, Package, Settings, ShoppingCart, Store, Tag, Truck, Users, X } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { LoginCard } from './LoginCard'
 import { cn } from '@/lib/utils'
@@ -17,9 +17,17 @@ const links = [
 ]
 
 export default function AdminLayout() {
-  const { isAdmin, logoutAdmin, state } = useStore()
+  const { isAdmin, logoutAdmin, state, authReady } = useStore()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+
+  if (!authReady) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-black text-muted-foreground">
+        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em]"><Loader2 className="size-4 animate-spin" /> Verificando acesso</div>
+      </div>
+    )
+  }
 
   if (!isAdmin) {
     return (
@@ -63,7 +71,7 @@ export default function AdminLayout() {
         {nav}
         <div className="space-y-1 border-t border-border p-2">
           <NavLink to="/" className="flex items-center gap-2.5 rounded-sm px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground"><Store className="size-4" /> Ver loja <ArrowUpRight className="ml-auto size-3" /></NavLink>
-          <button onClick={() => { logoutAdmin(); navigate('/admin', { replace: true }) }} className="flex w-full items-center gap-2.5 rounded-sm px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground"><LogOut className="size-4" /> Sair</button>
+          <button onClick={async () => { await logoutAdmin(); navigate('/admin', { replace: true }) }} className="flex w-full items-center gap-2.5 rounded-sm px-3 py-2.5 text-xs text-muted-foreground hover:text-foreground"><LogOut className="size-4" /> Sair</button>
         </div>
       </aside>
 
@@ -83,7 +91,7 @@ export default function AdminLayout() {
       <div className="lg:pl-60">
         <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-black/95 px-4 py-3 backdrop-blur lg:hidden">
           <button onClick={() => setOpen(true)} aria-label="Abrir menu" className="flex items-center gap-2 text-xs uppercase tracking-[0.16em]"><Menu className="size-4" /> Painel</button>
-          <button onClick={() => { logoutAdmin(); navigate('/admin', { replace: true }) }} aria-label="Sair" className="text-muted-foreground"><LogOut className="size-4" /></button>
+          <button onClick={async () => { await logoutAdmin(); navigate('/admin', { replace: true }) }} aria-label="Sair" className="text-muted-foreground"><LogOut className="size-4" /></button>
         </header>
         <main className="p-4 sm:p-6 lg:p-8"><Outlet /></main>
         <footer className="border-t border-border px-4 py-4 text-[10px] uppercase tracking-[0.2em] text-muted-foreground sm:px-8">Mandrake Moda e Estilo · Patos de Minas — MG</footer>
