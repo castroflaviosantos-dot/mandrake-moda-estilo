@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
 import { AdminHeader, AdminField, Modal, Panel, adminInput } from '@/components/admin/ui'
@@ -17,6 +17,8 @@ export default function AdminProducts() {
   const [editing, setEditing] = useState<Product | null>(null)
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState(blank)
+  const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const startNew = () => {
     setEditing(null)
@@ -36,12 +38,15 @@ export default function AdminProducts() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (saving || uploading) return
     const price = Number(form.price)
     if (!form.name.trim() || !form.brand.trim() || !form.category || !price) {
       toast.error('Preencha nome, marca, categoria e preço')
       return
     }
     const images = form.images.length ? form.images : ['https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=900&q=80']
+    setSaving(true)
+    try {
     if (editing) {
       await saveProduct({ ...editing, name: form.name, brand: form.brand, category: form.category, price, comparePrice: form.comparePrice ? Number(form.comparePrice) : undefined, description: form.description, images })
       toast.success('Produto atualizado')
@@ -70,6 +75,11 @@ export default function AdminProducts() {
       toast.success(`Produto criado com estoque de ${stock} un. por tamanho`)
     }
     setOpen(false)
+    } catch (error) {
+      toast.error(`Não foi possível salvar o produto: ${error instanceof Error ? error.message : 'erro desconhecido'}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -126,9 +136,17 @@ export default function AdminProducts() {
           <AdminField label="Preço (R$)"><input className={adminInput} value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value.replace(/[^0-9.]/g, '') })} inputMode="decimal" required /></AdminField>
           <AdminField label="Preço anterior (R$)"><input className={adminInput} value={form.comparePrice} onChange={(e) => setForm({ ...form, comparePrice: e.target.value.replace(/[^0-9.]/g, '') })} inputMode="decimal" /></AdminField>
           {!editing && <AdminField label="Estoque inicial por tamanho"><input className={adminInput} value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value.replace(/\D/g, '') })} inputMode="numeric" /></AdminField>}
-          <AdminField label="Imagens do produto" className="sm:col-span-2"><ImageUpload images={form.images} onChange={(images) => setForm({ ...form, images })} /></AdminField>
+          <AdminField label="Imagens do produto" className="sm:col-span-2"><ImageUpload images={form.images} onChange={(images) => setForm({ ...form, images })} onBusyChange={setUploading} /></AdminField>
           <AdminField label="Descrição" className="sm:col-span-2"><textarea rows={3} className="w-full border border-border bg-background p-2 text-sm outline-none focus:border-white/50" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></AdminField>
-          <div className="sm:col-span-2"><Button type="submit" className="w-full rounded-sm bg-white text-black">{editing ? 'Salvar alterações' : 'Criar produto'}</Button></div>
+          <div className="sm:col-span-2">
+            <Button type="submit" disabled={uploading || saving} className="w-full rounded-sm bg-white text-black disabled:opacity-60">
+              {uploading
+                ? <><Loader2 className="size-3.5 animate-spin" /> Aguarde o envio da imagem…</>
+                : saving
+                  ? <><Loader2 className="size-3.5 animate-spin" /> Salvando…</>
+                  : editing ? 'Salvar alterações' : 'Criar produto'}
+            </Button>
+          </div>
         </form>
       </Modal>
     </div>
