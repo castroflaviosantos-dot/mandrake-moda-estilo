@@ -2,7 +2,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useReducer,
 import { defaultSettings, emptyState, withDefaults } from './store-core'
 import { loadCatalog, localKeys, message, readLocal, writeLocal } from './store-client'
 import { remote, isSupabaseConfigured, type AdminSessionInfo } from './store-api'
-import { emptyState as baseEmptyState, withDefaults } from './store-core'
 import { buildDeliveryOptions } from './shipping'
 import type { CartItem, Customer, Address, DeliveryMethod, Order, Product, StoreState } from './types'
 
