@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
 import { AdminHeader, AdminField, Modal, Panel, adminInput } from '@/components/admin/ui'
+import { ImageUpload } from '@/components/admin/ImageUpload'
 import { Button } from '@/components/ui/button'
 import type { Banner } from '@/lib/types'
 
@@ -17,6 +18,7 @@ export default function AdminBanners() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.title.trim()) { toast.error('Informe o título do banner'); return }
+    if (!form.image.trim() && !editing?.image) { toast.error('Envie uma imagem para o banner'); return }
     saveBanner({
       id: editing?.id ?? `b-${Date.now()}`,
       order: editing?.order ?? state.banners.length + 1,
@@ -72,7 +74,17 @@ export default function AdminBanners() {
             <AdminField label="Texto do botão"><input className={adminInput} value={form.ctaLabel} onChange={(e) => setForm({ ...form, ctaLabel: e.target.value })} /></AdminField>
             <AdminField label="Link do botão"><input className={adminInput} value={form.ctaLink} onChange={(e) => setForm({ ...form, ctaLink: e.target.value })} /></AdminField>
           </div>
-          <AdminField label="Imagem (URL)"><input className={adminInput} value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} placeholder="https://..." /></AdminField>
+          <AdminField label="Imagem do banner">
+            <ImageUpload
+              images={form.image ? [form.image] : []}
+              onChange={(imgs) => setForm({ ...form, image: imgs[0] ?? '' })}
+              max={1}
+              bucket="banner-images"
+              folder="banners"
+              allowUrl={false}
+              hint="Envie uma imagem de capa · PNG, JPG, WEBP ou AVIF com no máximo 5 MB. Recomendado 1600×700 px."
+            />
+          </AdminField>
           <Button type="submit" className="w-full rounded-sm bg-white text-black">Salvar banner</Button>
         </form>
       </Modal>

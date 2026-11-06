@@ -8,9 +8,21 @@ interface ImageUploadProps {
   images: string[]
   onChange: (images: string[]) => void
   max?: number
+  bucket?: string
+  folder?: string
+  hint?: string
+  allowUrl?: boolean
 }
 
-export function ImageUpload({ images, onChange, max = 4 }: ImageUploadProps) {
+export function ImageUpload({
+  images,
+  onChange,
+  max = 4,
+  bucket = 'product-images',
+  folder = 'products',
+  hint,
+  allowUrl = true,
+}: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [url, setUrl] = useState('')
@@ -19,6 +31,10 @@ export function ImageUpload({ images, onChange, max = 4 }: ImageUploadProps) {
     if (!files || files.length === 0) return
     if (!isSupabaseEnabled) {
       toast.error('Envio de arquivos indisponível no modo demonstração. Use uma URL.')
+      return
+    }
+    if (images.length >= max) {
+      toast.error(`Máximo de ${max} imagem(ns)`)
       return
     }
     setBusy(true)
@@ -30,13 +46,13 @@ export function ImageUpload({ images, onChange, max = 4 }: ImageUploadProps) {
           continue
         }
         const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-        const path = `products/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
-        const { error } = await supabase.storage.from('product-images').upload(path, file, { cacheControl: '3600', upsert: false })
+        const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+        const { error } = await supabase.storage.from(bucket).upload(path, file, { cacheControl: '3600', upsert: false })
         if (error) {
           toast.error(`Falha no envio: ${error.message}`)
           continue
         }
-        const { data } = supabase.storage.from('product-images').getPublicUrl(path)
+        const { data } = supabase.storage.from(bucket).getPublicUrl(path)
         uploaded.push(data.publicUrl)
       }
       if (uploaded.length) {
@@ -53,7 +69,7 @@ export function ImageUpload({ images, onChange, max = 4 }: ImageUploadProps) {
     const clean = url.trim()
     if (!clean) return
     if (images.length >= max) {
-      toast.error(`Máximo de ${max} imagens`)
+      toast.error(`Máximo de ${max} imagem(ns)`)
       return
     }
     onChange([...images, clean])
@@ -74,7 +90,7 @@ export function ImageUpload({ images, onChange, max = 4 }: ImageUploadProps) {
             >
               <X className="size-3" />
             </button>
-            {i === 0 && <span className="absolute bottom-0 left-0 bg-black/70 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-white">Capa</span>}
+            {i === 0 && max > 1 && <span className="absolute bottom-0 left-0 bg-black/70 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-white">Capa</span>}
           </div>
         ))}
         {images.length < max && (
@@ -89,19 +105,23 @@ export function ImageUpload({ images, onChange, max = 4 }: ImageUploadProps) {
           </button>
         )}
       </div>
-      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp,image/avif" multiple hidden onChange={(e) => void upload(e.target.files)} />
-      <div className="flex gap-1.5">
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="ou cole uma URL de imagem"
-          className="h-9 flex-1 border border-border bg-background px-2 text-xs outline-none focus:border-white/50"
-        />
-        <button type="button" onClick={addUrl} className="h-9 border border-border px-3 text-[10px] uppercase tracking-[0.12em] transition-colors hover:border-white/50">
-          Adicionar
-        </button>
-      </div>
-      <p className="text-[10px] text-muted-foreground">Até {max} imagens · PNG, JPG, WEBP ou AVIF com no máximo 5 MB.</p>
+      <input ref={inputRef} type="file" accept="image/png,image/jpeg,image/webp,image/avif" multiple={max > 1} hidden onChange={(e) => void upload(e.target.files)} />
+      {allowUrl && (
+        <div className="flex gap-1.5">
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="ou cole uma URL de imagem"
+            className="h-9 flex-1 border border-border bg-background px-2 text-xs outline-none focus:border-white/50"
+          />
+          <button type="button" onClick={addUrl} className="h-9 border border-border px-3 text-[10px] uppercase tracking-[0.12em] transition-colors hover:border-white/50">
+            Adicionar
+          </button>
+        </div>
+      )}
+      <p className="text-[10px] text-muted-foreground">
+        {hint ?? `Até ${max} imagem(ns) · PNG, JPG, WEBP ou AVIF com no máximo 5 MB.`}
+      </p>
     </div>
   )
 }
