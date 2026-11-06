@@ -10,7 +10,25 @@ const readEnv = (value: unknown): string | undefined => {
   return raw.length > 0 ? raw : undefined
 }
 
-const serverUrl = readEnv(import.meta.env.VITE_SUPABASE_URL)?.replace(/\/+$/, '')
+/*
+ * Normaliza a URL do projeto: aceita que o valor venha com caminho colado
+ * (ex.: https://xxxx.supabase.co/rest/v1) ou sem o protocolo, mantendo
+ * apenas a origem https://<projeto>.supabase.co. É a origem que as rotas
+ * /auth/v1, /rest/v1 e /storage/v1 esperam.
+ */
+function normalizeUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`
+  try {
+    const parsed = new URL(withProtocol)
+    const origin = `${parsed.protocol}//${parsed.host}`
+    return origin.replace(/\/+$/, '')
+  } catch {
+    return value.replace(/\/+$/, '')
+  }
+}
+
+const serverUrl = normalizeUrl(readEnv(import.meta.env.VITE_SUPABASE_URL))
 const serverKey = readEnv(import.meta.env.VITE_SUPABASE_ANON_KEY)
 
 /* Chaves publicáveis novas (sb_publishable_...) não são JWT: só podem ir no cabeçalho apikey. */
@@ -19,7 +37,7 @@ const keyIsPublishable = (value: string | undefined) => Boolean(value && value.s
 const DEFAULT_URL = ''
 const DEFAULT_KEY = ''
 
-const url = serverUrl ?? readEnv(DEFAULT_URL)?.replace(/\/+$/, '')
+const url = serverUrl ?? normalizeUrl(readEnv(DEFAULT_URL))
 const key = serverKey ?? readEnv(DEFAULT_KEY)
 
 export const isSupabaseEnabled = Boolean(url && key)
@@ -458,6 +476,9 @@ export async function signInAdmin(email: string, password: string): Promise<Admi
   const body = safeJson(raw) as TokenBody | null
   if (!res.ok || !body?.access_token) {
     const detail = body?.error_description ?? body?.msg ?? body?.message ?? body?.error ?? raw.slice(0, 200) ?? ''
+    if (res.status === 404 || /invalid path/i.test(detail)) {
+      throw new Error(`Endereço do Supabase inválido (${res.status}). A VITE_SUPABASE_URL deve conter apenas https://SEU-PROJETO.supabase.co, sem /rest/v1, /auth/v1 ou barra no final. Valor em uso: ${base}.`)
+    }
     if (/confirm/i.test(detail)) throw new Error('Confirme o e-mail da conta antes de entrar.')
     if (/invalid api key|invalid key|no api key|apikey/i.test(detail)) throw new Error('Chave pública do Supabase inválida. Confira VITE_SUPABASE_ANON_KEY.')
     /* Só é credencial inválida quando o Auth realmente recusa e-mail/senha. */
