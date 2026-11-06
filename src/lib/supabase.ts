@@ -50,11 +50,54 @@ function storeSession(session: Session) {
   writeSession(session)
 }
 
+const nowSec = () => Math.floor(Date.now() / 1000)
+
+export function currentAccessToken(): string | null {
+  const session = readSession()
+  if (!session?.access_token) return null
+  if (!Number.isFinite(session.expires_at)) return session.access_token
+  return session.expires_at - 30 > nowSec() ? session.access_token : null
+}
+
 function refreshSession(): Session | null {
   const session = readSession()
   if (!session) return null
-  if (session.expires_at - 60 > Math.floor(Date.now() / 1000)) return session
-  return session
+  if (!Number.isFinite(session.expires_at)) return session
+  return session.expires_at - 30 > nowSec() ? session : null
+}
+
+async function refreshTokens(): Promise<Session | null> {
+  const session = readSession()
+  if (!session?.refresh_token || !url || !key) return null
+  try {
+    const res = await fetch(`${url}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { apikey: key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: session.refresh_token }),
+    })
+    const body = safeJson(await res.text()) as (Partial<Session> & { expires_in?: number }) | null
+    if (!res.ok || !body?.access_token) {
+      writeSession(null)
+      return null
+    }
+    const next: Session = {
+      access_token: body.access_token,
+      refresh_token: body.refresh_token ?? session.refresh_token,
+      expires_at: nowSec() + Number(body.expires_in ?? 3600),
+      user: body.user ?? session.user,
+    }
+    storeSession(next)
+    return next
+  } catch {
+    return null
+  }
+}
+
+async function validToken(): Promise<string | null> {
+  const active = currentAccessToken()
+  if (active) return active
+  const refreshed = await refreshTokens()
+  return refreshed?.access_token ?? null
 }
 
 function ensureConfig() {
@@ -62,10 +105,9 @@ function ensureConfig() {
   return { url, key }
 }
 
-function authHeaders(): Record<string, string> {
+async function authHeaders(): Promise<Record<string, string>> {
   const { key: anon } = ensureConfig()
-  const session = readSession()
-  const token = session?.access_token ?? (keyIsPublishable(anon) ? undefined : anon)
+  const token = (await validToken()) ?? (keyIsPublishable(anon) ? undefined : anon)
   return token ? { apikey: anon, Authorization: `Bearer ${token}` } : { apikey: anon }
 }
 
@@ -74,7 +116,7 @@ async function request<T>(path: string, init: RequestInit & { params?: Record<st
   const query = init.params ? `?${new URLSearchParams(init.params).toString()}` : ''
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...authHeaders(),
+    ...(await authHeaders()),
     ...((init.headers as Record<string, string> | undefined) ?? {}),
   }
   if (init.method === 'POST' || init.method === 'PATCH' || init.method === 'DELETE') {
@@ -389,7 +431,7 @@ export async function uploadImage(file: File): Promise<string> {
   const { url: base, key: anon } = ensureConfig()
   const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
   const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`
-  const token = readSession()?.access_token ?? (keyIsPublishable(anon) ? undefined : anon)
+  const token = (await validToken()) ?? (keyIsPublishable(anon) ? undefined : anon)
   const res = await fetch(`${base}/storage/v1/object/product-images/${path}`, {
     method: 'POST',
     headers: { apikey: anon, ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': file.type || 'image/jpeg' },
@@ -422,11 +464,21 @@ export async function signInAdmin(email: string, password: string): Promise<Admi
   const session: Session = {
     access_token: body.access_token,
     refresh_token: body.refresh_token,
-    expires_at: Math.floor(Date.now() / 1000) + Number(body.expires_in ?? 3600),
+    expires_at: nowSec() + Number(body.expires_in ?? 3600),
     user: body.user,
   }
   storeSession(session)
-  const isAdmin = await request<boolean>('/rest/v1/rpc/is_admin', { method: 'POST', body: '{}' })
+  let isAdmin = false
+  try {
+    isAdmin = await request<boolean>('/rest/v1/rpc/is_admin', { method: 'POST', body: '{}' }) === true
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : ''
+    writeSession(null)
+    if (/jwt|expired|token/i.test(detail)) throw new Error('Sessão inválida. Tente entrar novamente.')
+    if (/function|schema cache|404|not found/i.test(detail)) throw new Error('Função de verificação de administrador ausente no banco (is_admin). Fale com o responsável técnico.')
+    writeSession(session)
+    throw new Error(`Falha ao verificar o acesso de administrador: ${detail || 'erro desconhecido'}`)
+  }
   if (!isAdmin) {
     writeSession(null)
     throw new Error('Esta conta não tem acesso ao painel administrativo.')
@@ -438,7 +490,10 @@ export async function signInAdmin(email: string, password: string): Promise<Admi
 export async function restoreAdmin(): Promise<AdminSessionInfo | null> {
   const { key: anon } = ensureConfig()
   const session = refreshSession()
-  if (!session?.access_token) return null
+  if (!session?.access_token) {
+    const refreshed = await refreshTokens()
+    return refreshed ? restoreWithToken(refreshed.access_token, anon) : null
+  }
   try {
     const res = await fetch(`${url}/auth/v1/user`, { headers: { apikey: anon, Authorization: `Bearer ${session.access_token}` } })
     if (!res.ok) {
@@ -449,6 +504,18 @@ export async function restoreAdmin(): Promise<AdminSessionInfo | null> {
     const isAdmin = await request<boolean>('/rest/v1/rpc/is_admin', { method: 'POST', body: '{}' })
     if (!isAdmin) return null
     return { userId: user.id, email: user.email ?? '' }
+  } catch {
+    return null
+  }
+}
+
+async function restoreWithToken(token: string, anon: string): Promise<AdminSessionInfo | null> {
+  try {
+    const res = await fetch(`${url}/auth/v1/user`, { headers: { apikey: anon, Authorization: `Bearer ${token}` } })
+    if (!res.ok) return null
+    const user = (await res.json()) as { id: string; email?: string }
+    const isAdmin = await request<boolean>('/rest/v1/rpc/is_admin', { method: 'POST', body: '{}' })
+    return isAdmin ? { userId: user.id, email: user.email ?? '' } : null
   } catch {
     return null
   }
