@@ -14,23 +14,43 @@ export default function AdminBanners() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Banner | null>(null)
   const [form, setForm] = useState(empty)
+  const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!form.title.trim()) { toast.error('Informe o título do banner'); return }
-    if (!form.image.trim() && !editing?.image) { toast.error('Envie uma imagem para o banner'); return }
-    saveBanner({
-      id: editing?.id ?? `b-${Date.now()}`,
-      order: editing?.order ?? state.banners.length + 1,
-      title: form.title,
-      subtitle: form.subtitle,
-      description: form.description,
-      ctaLabel: form.ctaLabel,
-      ctaLink: form.ctaLink,
-      image: form.image || editing?.image || 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=1600&q=80',
-    })
-    toast.success(editing ? 'Banner atualizado' : 'Banner criado')
+  const closeModal = () => {
+    if (saving) return
     setOpen(false)
+    setUploading(false)
+  }
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (uploading || saving) return
+    if (!form.title.trim()) { toast.error('Informe o título do banner'); return }
+    if (!form.image.trim()) { toast.error('Envie uma imagem para o banner'); return }
+    const image = form.image.trim()
+    if (!/^https?:\/\//i.test(image)) { toast.error('A imagem do banner não tem um endereço válido. Envie o arquivo novamente.'); return }
+    setSaving(true)
+    try {
+      await saveBanner({
+        id: editing?.id ?? `b-${Date.now()}`,
+        order: editing?.order ?? state.banners.length + 1,
+        title: form.title,
+        subtitle: form.subtitle,
+        description: form.description,
+        ctaLabel: form.ctaLabel,
+        ctaLink: form.ctaLink,
+        image,
+      })
+      if (editing && form.image !== editing.image) toast.success('Banner atualizado com a nova imagem')
+      else toast.success(editing ? 'Banner atualizado' : 'Banner criado')
+      setOpen(false)
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'erro desconhecido'
+      toast.error(`Não foi possível salvar o banner: ${detail}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const banners = [...state.banners].sort((a, b) => a.order - b.order)
@@ -65,7 +85,7 @@ export default function AdminBanners() {
         ))}
       </div>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Editar banner' : 'Novo banner'}>
+      <Modal open={open} onClose={closeModal} title={editing ? 'Editar banner' : 'Novo banner'}>
         <form onSubmit={submit} className="space-y-3">
           <AdminField label="Selo / sobretítulo"><input className={adminInput} value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} placeholder="Coleção 2025" /></AdminField>
           <AdminField label="Título"><input className={adminInput} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></AdminField>
@@ -77,7 +97,8 @@ export default function AdminBanners() {
           <AdminField label="Imagem do banner">
             <ImageUpload
               images={form.image ? [form.image] : []}
-              onChange={(imgs) => setForm({ ...form, image: imgs[0] ?? '' })}
+              onChange={(imgs) => setForm((prev) => ({ ...prev, image: imgs[0] ?? '' }))}
+              onBusyChange={setUploading}
               max={1}
               bucket="banner-images"
               folder="banners"
@@ -85,7 +106,10 @@ export default function AdminBanners() {
               hint="Envie uma imagem de capa · PNG, JPG, WEBP ou AVIF com no máximo 5 MB. Recomendado 1600×700 px."
             />
           </AdminField>
-          <Button type="submit" className="w-full rounded-sm bg-white text-black">Salvar banner</Button>
+          <Button type="submit" disabled={uploading || saving} className="w-full rounded-sm bg-white text-black disabled:cursor-not-allowed disabled:opacity-60">
+            {uploading ? 'Aguarde o envio da imagem…' : saving ? 'Salvando…' : 'Salvar banner'}
+          </Button>
+          {uploading && <p className="text-[10px] text-muted-foreground">O salvamento é liberado quando o envio da imagem terminar.</p>}
         </form>
       </Modal>
     </div>
