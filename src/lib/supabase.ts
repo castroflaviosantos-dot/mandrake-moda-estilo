@@ -459,11 +459,16 @@ export async function signInAdmin(email: string, password: string): Promise<Admi
   if (!res.ok || !body?.access_token) {
     const detail = body?.error_description ?? body?.msg ?? body?.message ?? body?.error ?? raw.slice(0, 200) ?? ''
     if (/confirm/i.test(detail)) throw new Error('Confirme o e-mail da conta antes de entrar.')
-    if (/invalid api key|invalid key|apikey/i.test(detail)) throw new Error('Chave pública do Supabase inválida. Confira VITE_SUPABASE_ANON_KEY.')
-    if (/invalid|senha|password/i.test(detail) || res.status === 400) throw new Error('E-mail ou senha inválidos.')
-    if (res.status === 401 || res.status === 403) throw new Error(`Login recusado pelo Supabase (${res.status}): ${detail || 'sem detalhe'}`)
-    if (res.status >= 500 || res.status === 0) throw new Error('O Supabase não respondeu. Verifique a URL do projeto (VITE_SUPABASE_URL).')
-    throw new Error(`Não foi possível entrar (${res.status}): ${detail || 'sem detalhe retornado pelo servidor'}`)
+    if (/invalid api key|invalid key|no api key|apikey/i.test(detail)) throw new Error('Chave pública do Supabase inválida. Confira VITE_SUPABASE_ANON_KEY.')
+    /* Só é credencial inválida quando o Auth realmente recusa e-mail/senha. */
+    const wrongPassword = /invalid login credentials|invalid_grant|invalid password|user not found/i.test(detail)
+      || (res.status === 400 && /credentials|password|email/i.test(detail))
+    if (wrongPassword) {
+      throw new Error(`E-mail ou senha não conferem (${res.status}): ${detail || 'credenciais recusadas'}. Redefina a senha em Authentication → Users.`)
+    }
+    if (/email not confirmed/i.test(detail)) throw new Error('E-mail da conta ainda não confirmado.')
+    if (res.status >= 500) throw new Error(`O Supabase não respondeu (${res.status}): ${detail || 'sem detalhe'}. Verifique VITE_SUPABASE_URL.`)
+    throw new Error(`Login recusado pelo Supabase (${res.status}): ${detail || 'nenhum detalhe retornado'}.`)
   }
   const session: Session = {
     access_token: body.access_token,
