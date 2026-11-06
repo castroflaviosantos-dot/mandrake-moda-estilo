@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
+import { newBannerId } from '@/lib/supabase'
 import { AdminHeader, AdminField, Modal, Panel, adminInput } from '@/components/admin/ui'
 import { ImageUpload } from '@/components/admin/ImageUpload'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,8 @@ export default function AdminBanners() {
   const { state, saveBanner, deleteBanner, moveBanner } = useStore()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Banner | null>(null)
+  /* Id do banner em criação: mantém o mesmo identificador entre tentativas. */
+  const [draftId, setDraftId] = useState('')
   const [form, setForm] = useState(empty)
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -33,7 +36,7 @@ export default function AdminBanners() {
     setSaving(true)
     try {
       await saveBanner({
-        id: editing?.id ?? `b-${Date.now()}`,
+        id: editing?.id ?? draftId,
         order: editing?.order ?? state.banners.length + 1,
         title: form.title,
         subtitle: form.subtitle,
@@ -60,7 +63,7 @@ export default function AdminBanners() {
       <AdminHeader
         title="Banners"
         subtitle="Home — carrossel"
-        action={<Button size="sm" onClick={() => { setEditing(null); setForm(empty); setOpen(true) }} className="rounded-sm bg-white text-black"><Plus className="size-3.5" /> Novo banner</Button>}
+        action={<Button size="sm" onClick={() => { setEditing(null); setDraftId(newBannerId()); setForm(empty); setOpen(true) }} className="rounded-sm bg-white text-black"><Plus className="size-3.5" /> Novo banner</Button>}
       />
       <p className="mb-4 text-[11px] text-muted-foreground">Os banners são exibidos na ordem abaixo e alternam automaticamente na página inicial.</p>
       <div className="space-y-3">
