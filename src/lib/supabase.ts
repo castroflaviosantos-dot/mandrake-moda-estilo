@@ -453,13 +453,17 @@ export async function signInAdmin(email: string, password: string): Promise<Admi
     headers: { apikey: anon, 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: email.trim(), password }),
   })
-  type TokenBody = Session & { expires_in?: number; error_description?: string; msg?: string; error?: string }
-  const body = safeJson(await res.text()) as TokenBody | null
+  type TokenBody = Session & { expires_in?: number; error_description?: string; msg?: string; error?: string; message?: string }
+  const raw = await res.text()
+  const body = safeJson(raw) as TokenBody | null
   if (!res.ok || !body?.access_token) {
-    const detail = body?.error_description ?? body?.msg ?? body?.error ?? ''
+    const detail = body?.error_description ?? body?.msg ?? body?.message ?? body?.error ?? raw.slice(0, 200) ?? ''
     if (/confirm/i.test(detail)) throw new Error('Confirme o e-mail da conta antes de entrar.')
-    if (/invalid/i.test(detail) || res.status === 400) throw new Error('E-mail ou senha inválidos.')
-    throw new Error(detail || 'Não foi possível entrar. Tente novamente.')
+    if (/invalid api key|invalid key|apikey/i.test(detail)) throw new Error('Chave pública do Supabase inválida. Confira VITE_SUPABASE_ANON_KEY.')
+    if (/invalid|senha|password/i.test(detail) || res.status === 400) throw new Error('E-mail ou senha inválidos.')
+    if (res.status === 401 || res.status === 403) throw new Error(`Login recusado pelo Supabase (${res.status}): ${detail || 'sem detalhe'}`)
+    if (res.status >= 500 || res.status === 0) throw new Error('O Supabase não respondeu. Verifique a URL do projeto (VITE_SUPABASE_URL).')
+    throw new Error(`Não foi possível entrar (${res.status}): ${detail || 'sem detalhe retornado pelo servidor'}`)
   }
   const session: Session = {
     access_token: body.access_token,
@@ -470,14 +474,15 @@ export async function signInAdmin(email: string, password: string): Promise<Admi
   storeSession(session)
   let isAdmin = false
   try {
-    isAdmin = await request<boolean>('/rest/v1/rpc/is_admin', { method: 'POST', body: '{}' }) === true
+    isAdmin = await isAdminSession()
   } catch (error) {
     const detail = error instanceof Error ? error.message : ''
     writeSession(null)
     if (/jwt|expired|token/i.test(detail)) throw new Error('Sessão inválida. Tente entrar novamente.')
+    if (/permission denied|permission|not allowed|grant/i.test(detail)) throw new Error('O banco não autoriza a verificação de administrador (permissão de execução de is_admin). Fale com o responsável técnico.')
     if (/function|schema cache|404|not found/i.test(detail)) throw new Error('Função de verificação de administrador ausente no banco (is_admin). Fale com o responsável técnico.')
     writeSession(session)
-    throw new Error(`Falha ao verificar o acesso de administrador: ${detail || 'erro desconhecido'}`)
+    throw new Error(`Login aceito, mas a verificação de administrador falhou: ${detail || 'erro desconhecido'}`)
   }
   if (!isAdmin) {
     writeSession(null)
@@ -485,6 +490,26 @@ export async function signInAdmin(email: string, password: string): Promise<Admi
   }
   void anon
   return { userId: body.user?.id ?? '', email: body.user?.email ?? email }
+}
+
+/*
+ * Verificação de administrador feita diretamente no banco, sem depender do
+ * cache de schema do PostgREST nem da exposição da função no RPC.
+ */
+async function isAdminSession(): Promise<boolean> {
+  const { url: base, key: anon } = ensureConfig()
+  const token = await validToken()
+  if (!token) throw new Error('jwt ausente')
+  const res = await fetch(`${base}/rest/v1/admin_users?select=user_id&limit=1`, {
+    headers: { apikey: anon, Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  })
+  const text = await res.text()
+  if (!res.ok) {
+    const body = safeJson(text) as { message?: string } | null
+    throw new Error(body?.message || text.slice(0, 200) || `falha ${res.status}`)
+  }
+  const rows = safeJson(text)
+  return Array.isArray(rows) && rows.length > 0
 }
 
 export async function restoreAdmin(): Promise<AdminSessionInfo | null> {
@@ -501,7 +526,7 @@ export async function restoreAdmin(): Promise<AdminSessionInfo | null> {
       return null
     }
     const user = (await res.json()) as { id: string; email?: string }
-    const isAdmin = await request<boolean>('/rest/v1/rpc/is_admin', { method: 'POST', body: '{}' })
+    const isAdmin = await isAdminSession()
     if (!isAdmin) return null
     return { userId: user.id, email: user.email ?? '' }
   } catch {
@@ -514,7 +539,7 @@ async function restoreWithToken(token: string, anon: string): Promise<AdminSessi
     const res = await fetch(`${url}/auth/v1/user`, { headers: { apikey: anon, Authorization: `Bearer ${token}` } })
     if (!res.ok) return null
     const user = (await res.json()) as { id: string; email?: string }
-    const isAdmin = await request<boolean>('/rest/v1/rpc/is_admin', { method: 'POST', body: '{}' })
+    const isAdmin = await isAdminSession()
     return isAdmin ? { userId: user.id, email: user.email ?? '' } : null
   } catch {
     return null
