@@ -32,6 +32,17 @@ function writeSession(session: Session | null) {
   }
 }
 
+function storeSession(session: Session) {
+  writeSession(session)
+}
+
+function refreshSession(): Session | null {
+  const session = readSession()
+  if (!session) return null
+  if (session.expires_at - 60 > Math.floor(Date.now() / 1000)) return session
+  return session
+}
+
 function ensureConfig() {
   if (!url || !key) throw new Error('Conexão com o banco não configurada.')
   return { url, key }
@@ -72,11 +83,36 @@ function safeJson(text: string): unknown {
   }
 }
 
-/* API mínima compatível com o uso anterior de `supabase` pelos módulos da loja. */
+/* API mínima compatível com o uso de `supabase` pelos módulos da loja. */
 export const supabase = isSupabaseEnabled
   ? {
-      rpc: <T,>(fn: string, args: Record<string, unknown> = {}) =>
-        request<T>(`/rest/v1/rpc/${fn}`, { method: 'POST', body: JSON.stringify(args) }),
+      rpc: async <T,>(fn: string, args: Record<string, unknown> = {}) => {
+        try {
+          const data = await request<T>(`/rest/v1/rpc/${fn}`, { method: 'POST', body: JSON.stringify(args) })
+          return { data, error: null as null | { message: string } }
+        } catch (error) {
+          return { data: null, error: { message: error instanceof Error ? error.message : 'Falha na comunicação com o banco.' } }
+        }
+      },
+      auth: {
+        getSession: async () => {
+          const session = refreshSession()
+          return session
+            ? { data: { session: { access_token: session.access_token, user: session.user } }, error: null }
+            : { data: { session: null }, error: null }
+        },
+        signOut: async () => {
+          const session = readSession()
+          writeSession(null)
+          if (session?.access_token && url && key) {
+            await fetch(`${url}/auth/v1/logout`, {
+              method: 'POST',
+              headers: { apikey: key, Authorization: `Bearer ${session.access_token}` },
+            }).catch(() => undefined)
+          }
+          return { error: null }
+        },
+      },
       get session() {
         return readSession()
       },
@@ -359,26 +395,33 @@ export async function signInAdmin(email: string, password: string): Promise<Admi
     headers: { apikey: anon, 'Content-Type': 'application/json' },
     body: JSON.stringify({ email: email.trim(), password }),
   })
-  const body = safeJson(await res.text()) as (Session & { error_description?: string; msg?: string }) | null
-  if (!res.ok || !body?.access_token) throw new Error('E-mail ou senha inválidos.')
+  type TokenBody = Session & { expires_in?: number; error_description?: string; msg?: string; error?: string }
+  const body = safeJson(await res.text()) as TokenBody | null
+  if (!res.ok || !body?.access_token) {
+    const detail = body?.error_description ?? body?.msg ?? body?.error ?? ''
+    if (/confirm/i.test(detail)) throw new Error('Confirme o e-mail da conta antes de entrar.')
+    if (/invalid/i.test(detail) || res.status === 400) throw new Error('E-mail ou senha inválidos.')
+    throw new Error(detail || 'Não foi possível entrar. Tente novamente.')
+  }
   const session: Session = {
     access_token: body.access_token,
     refresh_token: body.refresh_token,
-    expires_at: Math.floor(Date.now() / 1000) + Number((body as unknown as { expires_in?: number }).expires_in ?? 3600),
+    expires_at: Math.floor(Date.now() / 1000) + Number(body.expires_in ?? 3600),
     user: body.user,
   }
-  writeSession(session)
+  storeSession(session)
   const isAdmin = await request<boolean>('/rest/v1/rpc/is_admin', { method: 'POST', body: '{}' })
   if (!isAdmin) {
     writeSession(null)
     throw new Error('Esta conta não tem acesso ao painel administrativo.')
   }
+  void anon
   return { userId: body.user?.id ?? '', email: body.user?.email ?? email }
 }
 
 export async function restoreAdmin(): Promise<AdminSessionInfo | null> {
   const { key: anon } = ensureConfig()
-  const session = readSession()
+  const session = refreshSession()
   if (!session?.access_token) return null
   try {
     const res = await fetch(`${url}/auth/v1/user`, { headers: { apikey: anon, Authorization: `Bearer ${session.access_token}` } })
@@ -397,7 +440,8 @@ export async function restoreAdmin(): Promise<AdminSessionInfo | null> {
 
 export async function signOutAdmin() {
   if (!supabase) return
-  await supabase.signOut()
+  await supabase.auth.signOut()
+  writeSession(null)
 }
 
 void key

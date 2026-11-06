@@ -28,7 +28,8 @@ type StoreContextValue = {
   isAdmin: boolean
   admin: AdminSessionInfo | null
   authReady: boolean
-  loginAdmin: (email: string, password: string) => Promise<void>
+  loginAdmin: (email: string, password: string) => Promise<boolean>
+  loginError: string
   logoutAdmin: () => Promise<void>
   reload: () => Promise<void>
   cartLines: { item: CartItem; product: Product }[]
@@ -74,6 +75,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [usingDatabase, setUsingDatabase] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [admin, setAdmin] = useState<AdminSessionInfo | null>(null)
+  const [loginError, setLoginError] = useState('')
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured)
 
   const patch = useCallback((next: Partial<StoreState>) => dispatch({ type: 'patch', patch: next }), [])
@@ -143,22 +145,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     writeLocal(localKeys.customer, customer)
   }, [patch])
 
-  const loginAdmin = useCallback(async (email: string, password: string) => {
-    if (!isSupabaseConfigured) throw new Error('Conexão com o banco não configurada neste ambiente.')
-    const session = await remote.signIn(email, password)
-    setAdmin(session)
-    await reload()
+  const loginAdmin = useCallback(async (email: string, password: string): Promise<boolean> => {
+    setLoginError('')
+    if (!isSupabaseConfigured) {
+      setLoginError('Conexão com o banco não configurada neste ambiente.')
+      return false
+    }
     try {
-      const adminOrders = await remote.orders()
-      patch({ orders: adminOrders })
-    } catch {
-      /* painel segue carregando o restante */
+      const session = await remote.signIn(email, password)
+      setAdmin(session)
+      await reload()
+      try {
+        const adminOrders = await remote.orders()
+        patch({ orders: adminOrders })
+      } catch {
+        /* painel segue carregando o restante */
+      }
+      return true
+    } catch (error) {
+      setLoginError(message(error))
+      return false
     }
   }, [reload, patch])
 
   const logoutAdmin = useCallback(async () => {
     await remote.signOut().catch(() => undefined)
     setAdmin(null)
+    setLoginError('')
     patch({ orders: [] })
   }, [patch])
 
@@ -270,7 +283,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value: StoreContextValue = {
     state, ready, usingDatabase, syncError, isAdmin: Boolean(admin), admin, authReady,
-    loginAdmin, logoutAdmin, reload,
+    loginAdmin, loginError, logoutAdmin, reload,
     cartLines, cartCount, subtotal, deliveryOptions,
     addToCart, updateQuantity, removeFromCart, clearCart, saveCustomer,
     placeOrder, trackOrder, findOrdersByEmail,

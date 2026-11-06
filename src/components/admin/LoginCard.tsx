@@ -29,6 +29,8 @@ export function LoginCard({ onSuccess }: { onSuccess: () => void }) {
       } else {
         setError(loginError || 'Credenciais inválidas. Verifique e tente novamente.')
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível entrar. Tente novamente.')
     } finally {
       setBusy(false)
     }
@@ -62,8 +64,8 @@ export function LoginCard({ onSuccess }: { onSuccess: () => void }) {
 
       {error && <p className="mt-2 text-[11px] text-red-400">{error}</p>}
 
-      <Button type="submit" disabled={busy} className="mt-4 h-11 w-full rounded-sm bg-white text-[11px] uppercase tracking-[0.16em] text-black">
-        {busy && <Loader2 className="size-4 animate-spin" />} Entrar no painel
+        <Button type="submit" disabled={busy} className="mt-4 h-11 w-full rounded-sm bg-white text-[11px] uppercase tracking-[0.16em] text-black">
+        {busy && <Loader2 className="size-4 animate-spin" />} {busy ? 'Entrando…' : 'Entrar no painel'}
       </Button>
 
       <p className="mt-4 border border-border bg-secondary/40 px-3 py-2 text-[10px] leading-relaxed text-muted-foreground">
