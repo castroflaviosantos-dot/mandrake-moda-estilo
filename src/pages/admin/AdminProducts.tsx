@@ -38,7 +38,8 @@ export default function AdminProducts() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (saving || uploading) return
+    if (saving) return
+    if (uploading) { toast.error('Aguarde o envio da imagem terminar para salvar'); return }
     const price = Number(form.price)
     if (!form.name.trim() || !form.brand.trim() || !form.category || !price) {
       toast.error('Preencha nome, marca, categoria e preço')
@@ -139,7 +140,7 @@ export default function AdminProducts() {
           <AdminField label="Imagens do produto" className="sm:col-span-2"><ImageUpload images={form.images} onChange={(images) => setForm({ ...form, images })} onBusyChange={setUploading} /></AdminField>
           <AdminField label="Descrição" className="sm:col-span-2"><textarea rows={3} className="w-full border border-border bg-background p-2 text-sm outline-none focus:border-white/50" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></AdminField>
           <div className="sm:col-span-2">
-            <Button type="submit" disabled={uploading || saving} className="w-full rounded-sm bg-white text-black disabled:opacity-60">
+            <Button type="submit" disabled={uploading || saving} data-saving={saving ? 'true' : undefined} className="w-full rounded-sm bg-white text-black disabled:opacity-60">
               {uploading
                 ? <><Loader2 className="size-3.5 animate-spin" /> Aguarde o envio da imagem…</>
                 : saving

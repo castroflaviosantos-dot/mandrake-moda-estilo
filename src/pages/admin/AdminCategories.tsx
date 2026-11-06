@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
 import { AdminHeader, AdminField, Modal, Panel, adminInput } from '@/components/admin/ui'
 import { ImageUpload } from '@/components/admin/ImageUpload'
+import { newCategoryId } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import type { Category } from '@/lib/types'
 
@@ -23,7 +24,7 @@ export default function AdminCategories() {
 
   const startNew = () => {
     setEditing(null)
-    setNewId(`c-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`)
+    setNewId(newCategoryId())
     setForm({ name: '', description: '', image: '' })
     setOpen(true)
   }
@@ -42,8 +43,8 @@ export default function AdminCategories() {
     if (!form.image.trim()) { toast.error('Envie uma imagem para a categoria'); return }
     setSaving(true)
     const category: Category = {
-      id: editing?.id ?? newId ?? `c-${Date.now()}`,
-      slug: editing?.slug ?? slugify(form.name),
+      id: editing?.id ?? newId ?? newCategoryId(),
+      slug: slugify(form.name) || (editing?.slug ?? `categoria-${Date.now().toString(36)}`),
       name: form.name.trim(),
       description: form.description,
       image: form.image.trim(),
