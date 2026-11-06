@@ -29,8 +29,13 @@ export function Footer() {
 
       <div className="container-mandrake grid gap-10 py-14 md:grid-cols-4">
         <div className="md:col-span-1">
-          <p className="font-display text-2xl tracking-[0.14em]">MANDRAKE</p>
-          <p className="mt-1 text-[9px] tracking-[0.4em] text-muted-foreground">MODA E ESTILO</p>
+          <div className="flex items-center gap-3">
+            <img src="/logo-mandrake.png" alt="Mandrake Moda e Estilo" width={48} height={48} className="size-12 shrink-0 rounded-full object-contain ring-1 ring-white/10" />
+            <div>
+              <p className="font-display text-2xl tracking-[0.14em]">MANDRAKE</p>
+              <p className="mt-1 text-[9px] tracking-[0.4em] text-muted-foreground">MODA E ESTILO</p>
+            </div>
+          </div>
           <p className="mt-5 max-w-xs text-sm leading-relaxed text-muted-foreground">
             Moda urbana, vestuário e marcas originais. Há mais de 5 anos vestindo atitude em Patos de Minas e em todo o Brasil.
           </p>
