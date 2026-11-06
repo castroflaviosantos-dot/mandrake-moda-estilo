@@ -450,15 +450,34 @@ export async function deleteCategoryRow(id: string) {
 }
 
 export async function upsertBanner(banner: Banner) {
-  await request('/rest/v1/banners', {
-    method: 'POST',
-    params: { on_conflict: 'id' },
-    body: JSON.stringify({
-      id: banner.id, sort_order: banner.order, eyebrow: banner.eyebrow, title: banner.title,
-      description: banner.description, cta_label: banner.ctaLabel, cta_link: banner.ctaLink,
-      image: banner.image, active: banner.active, updated_at: new Date().toISOString(),
-    }),
-  })
+  const updatedAt = new Date().toISOString()
+  const row = {
+    id: banner.id, sort_order: banner.order, eyebrow: banner.eyebrow ?? '', title: banner.title,
+    description: banner.description ?? '', cta_label: banner.ctaLabel ?? '', cta_link: banner.ctaLink ?? '/produtos',
+    image: banner.image, active: banner.active ?? true, updated_at: updatedAt,
+  }
+  try {
+    await request('/rest/v1/banners', {
+      method: 'POST',
+      params: { on_conflict: 'id' },
+      body: JSON.stringify(row),
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : ''
+    /* Alguns bancos têm o identificador gerado automaticamente: nesse caso a
+gravamos o banner e usamos o id devolvido pelo banco para os próximos updates. */
+    const idColumnIssue = /banners_pkey|banners_id_fkey|violates not-null|id/i.test(message)
+      && /duplicate key|not-null|invalid input syntax|invalid text representation|uuid/i.test(message)
+    if (!idColumnIssue) throw error
+    const { id: _ignored, ...rest } = row
+    const inserted = await request<Array<{ id: string | number }>>('/rest/v1/banners', {
+      method: 'POST',
+      body: JSON.stringify(rest),
+    })
+    const newId = Array.isArray(inserted) && inserted[0]?.id !== undefined ? String(inserted[0].id) : null
+    if (!newId) throw new Error('O banco não informou o identificador do banner criado. Recarregue o painel e confira a lista.')
+    throw new Error(`O banner foi criado no banco com o identificador interno ${newId}, mas o painel usou "${banner.id}". Recarregue o painel para vê-lo e editar pelo botão de lápis.`)
+  }
 }
 
 export async function deleteBannerRow(id: string) {
