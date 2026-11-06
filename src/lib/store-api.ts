@@ -10,6 +10,8 @@ import type { Banner, Category, Neighborhood, Order, Product, Settings } from '.
 
 export type AdminSessionInfo = SessionInfo
 export const isSupabaseConfigured = isSupabaseEnabled
+export type AdminMode = 'supabase' | 'demo'
+export const adminMode: AdminMode = isSupabaseEnabled ? 'supabase' : 'demo'
 
 export const remote = {
   restore: restoreAdmin,

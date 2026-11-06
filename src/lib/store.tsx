@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react'
 import { defaultSettings, withDefaults } from './store-core'
 import { loadCatalog, localKeys, message, readLocal, writeLocal } from './store-client'
-import { remote, isSupabaseConfigured, type AdminSessionInfo } from './store-api'
+import { remote, isSupabaseConfigured, adminMode, type AdminSessionInfo } from './store-api'
 import { buildDeliveryOptions } from './shipping'
 import type { CartItem, Customer, Address, DeliveryMethod, Order, Product, StoreState } from './types'
 
@@ -28,7 +28,8 @@ type StoreContextValue = {
   isAdmin: boolean
   admin: AdminSessionInfo | null
   authReady: boolean
-  loginAdmin: (email: string, password: string) => Promise<boolean>
+  adminMode: 'supabase' | 'demo'
+  loginAdmin: (email: string, password?: string) => Promise<boolean>
   loginError: string
   logoutAdmin: () => Promise<void>
   reload: () => Promise<void>
@@ -145,10 +146,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     writeLocal(localKeys.customer, customer)
   }, [patch])
 
-  const loginAdmin = useCallback(async (email: string, password: string): Promise<boolean> => {
+  const loginAdmin = useCallback(async (email: string, password?: string): Promise<boolean> => {
     setLoginError('')
     if (!isSupabaseConfigured) {
       setLoginError('Conexão com o banco não configurada neste ambiente.')
+      return false
+    }
+    if (!password) {
+      setLoginError('Informe a senha da conta de administrador.')
       return false
     }
     try {
@@ -282,7 +287,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [usingDatabase])
 
   const value: StoreContextValue = {
-    state, ready, usingDatabase, syncError, isAdmin: Boolean(admin), admin, authReady,
+    state, ready, usingDatabase, syncError, isAdmin: Boolean(admin), admin, authReady, adminMode,
     loginAdmin, loginError, logoutAdmin, reload,
     cartLines, cartCount, subtotal, deliveryOptions,
     addToCart, updateQuantity, removeFromCart, clearCart, saveCustomer,
