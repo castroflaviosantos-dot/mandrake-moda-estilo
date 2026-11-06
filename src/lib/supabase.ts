@@ -435,14 +435,34 @@ export async function deleteProductRow(id: string) {
 }
 
 export async function upsertCategory(category: Category, index: number) {
-  await request('/rest/v1/categories', {
-    method: 'POST',
-    params: { on_conflict: 'id' },
-    body: JSON.stringify({
-      id: category.id, name: category.name, slug: category.slug, description: category.description ?? '',
-      image: category.image ?? '', active: category.active, sort_order: index + 1, updated_at: new Date().toISOString(),
-    }),
+  const updatedAt = new Date().toISOString()
+  /*
+   * Mesmo tratamento usado em banners/produtos: o id sempre vem do painel.
+   * Primeiro tentamos atualizar pelo id; se a categoria ainda não existir,
+   * verificamos se o slug já está em uso (unicidade própria da tabela) e,
+   * por fim, gravamos o registro novo.
+   */
+  const row = {
+    id: category.id, name: category.name, slug: category.slug, description: category.description ?? '',
+    image: category.image ?? '', active: category.active, sort_order: index + 1, updated_at: updatedAt,
+  }
+  const { id, ...rest } = row
+  const updated = await request<Array<{ id: string | number }>>('/rest/v1/categories', {
+    method: 'PATCH',
+    params: { id: `eq.${id}` },
+    body: JSON.stringify(rest),
   })
+  if (Array.isArray(updated) && updated.length > 0) return
+
+  const sameSlug = await request<Array<{ id: string }>>('/rest/v1/categories', {
+    method: 'GET',
+    params: { select: 'id', slug: `eq.${category.slug}` },
+  })
+  if (Array.isArray(sameSlug) && sameSlug.length > 0) {
+    const conflict = sameSlug[0]?.id ?? 'outra categoria'
+    throw new Error(`Já existe uma categoria com o endereço "${category.slug}" (${conflict}). Use outro nome ou edite a categoria existente.`)
+  }
+  await request('/rest/v1/categories', { method: 'POST', params: { on_conflict: 'id' }, body: JSON.stringify(row) })
 }
 
 export async function deleteCategoryRow(id: string) {
@@ -473,6 +493,13 @@ export async function upsertBanner(banner: Banner) {
     params: { on_conflict: 'id' },
     body: JSON.stringify(row),
   })
+}
+
+export function newCategoryId(): string {
+  const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID().slice(0, 8)
+    : Math.random().toString(36).slice(2, 10)
+  return `c-${Date.now().toString(36)}-${random}`
 }
 
 export function newBannerId(): string {
