@@ -451,33 +451,35 @@ export async function deleteCategoryRow(id: string) {
 
 export async function upsertBanner(banner: Banner) {
   const updatedAt = new Date().toISOString()
+  /*
+   * A tabela banners usa id de texto sem valor padrão: o identificador sempre
+   * vem do painel. Atualizamos o registro existente pelo id e, quando ele
+   * ainda não existe, gravamos com esse mesmo id.
+   */
   const row = {
     id: banner.id, sort_order: banner.order, eyebrow: banner.eyebrow ?? '', title: banner.title,
     description: banner.description ?? '', cta_label: banner.ctaLabel ?? '', cta_link: banner.ctaLink ?? '/produtos',
     image: banner.image, active: banner.active ?? true, updated_at: updatedAt,
   }
-  try {
-    await request('/rest/v1/banners', {
-      method: 'POST',
-      params: { on_conflict: 'id' },
-      body: JSON.stringify(row),
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : ''
-    /* Alguns bancos têm o identificador gerado automaticamente: nesse caso a
-gravamos o banner e usamos o id devolvido pelo banco para os próximos updates. */
-    const idColumnIssue = /banners_pkey|banners_id_fkey|violates not-null|id/i.test(message)
-      && /duplicate key|not-null|invalid input syntax|invalid text representation|uuid/i.test(message)
-    if (!idColumnIssue) throw error
-    const { id: _ignored, ...rest } = row
-    const inserted = await request<Array<{ id: string | number }>>('/rest/v1/banners', {
-      method: 'POST',
-      body: JSON.stringify(rest),
-    })
-    const newId = Array.isArray(inserted) && inserted[0]?.id !== undefined ? String(inserted[0].id) : null
-    if (!newId) throw new Error('O banco não informou o identificador do banner criado. Recarregue o painel e confira a lista.')
-    throw new Error(`O banner foi criado no banco com o identificador interno ${newId}, mas o painel usou "${banner.id}". Recarregue o painel para vê-lo e editar pelo botão de lápis.`)
-  }
+  const { id, ...rest } = row
+  const updated = await request<Array<{ id: string | number }>>('/rest/v1/banners', {
+    method: 'PATCH',
+    params: { id: `eq.${id}` },
+    body: JSON.stringify(rest),
+  })
+  if (Array.isArray(updated) && updated.length > 0) return
+  await request('/rest/v1/banners', {
+    method: 'POST',
+    params: { on_conflict: 'id' },
+    body: JSON.stringify(row),
+  })
+}
+
+export function newBannerId(): string {
+  const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID().slice(0, 8)
+    : Math.random().toString(36).slice(2, 10)
+  return `b-${Date.now().toString(36)}-${random}`
 }
 
 export async function deleteBannerRow(id: string) {
