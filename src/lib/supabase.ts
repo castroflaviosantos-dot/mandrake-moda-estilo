@@ -70,6 +70,10 @@ function storeSession(session: Session) {
 
 const nowSec = () => Math.floor(Date.now() / 1000)
 
+export function hasValidAccessToken(): boolean {
+  return currentAccessToken() !== null
+}
+
 export function currentAccessToken(): string | null {
   const session = readSession()
   if (!session?.access_token) return null
@@ -187,6 +191,44 @@ export const supabase = isSupabaseEnabled
           }
           return { error: null }
         },
+      },
+      storage: {
+        from: (bucket: string) => ({
+          upload: async (path: string, file: Blob, options?: { cacheControl?: string; upsert?: boolean; contentType?: string }) => {
+            const { url: base, key: anon } = ensureConfig()
+            const token = (await validToken()) ?? (keyIsPublishable(anon) ? undefined : anon)
+            const encodedPath = path.split('/').map(encodeURIComponent).join('/')
+            try {
+              const res = await fetch(`${base}/storage/v1/object/${bucket}/${encodedPath}`, {
+                method: 'POST',
+                headers: {
+                  apikey: anon,
+                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                  'Content-Type': options?.contentType || (file as File).type || 'application/octet-stream',
+                  'x-upsert': options?.upsert ? 'true' : 'false',
+                  'cache-control': `max-age=${options?.cacheControl ?? '3600'}`,
+                },
+                body: file,
+              })
+              if (!res.ok) {
+                const text = await res.text()
+                const body = safeJson(text) as { message?: string; error?: string; statusCode?: string } | null
+                const detail = body?.message ?? body?.error ?? text.slice(0, 300) ?? ''
+                return { data: null, error: { message: detail || `HTTP ${res.status}`, statusCode: String(res.status) } }
+              }
+              const text = await res.text()
+              const body = safeJson(text) as Record<string, unknown> | null
+              return { data: { path: String(body?.Key ?? path) }, error: null }
+            } catch (error) {
+              return { data: null, error: { message: error instanceof Error ? error.message : 'Falha de rede no envio.', statusCode: '0' } }
+            }
+          },
+          getPublicUrl: (path: string) => {
+            const base = url ?? DEFAULT_URL
+            const encodedPath = path.split('/').map(encodeURIComponent).join('/')
+            return { data: { publicUrl: `${base}/storage/v1/object/public/${bucket}/${encodedPath}` } }
+          },
+        }),
       },
       get session() {
         return readSession()
@@ -445,21 +487,14 @@ export async function saveSettingsRow(settings: Settings) {
   })
 }
 
+/* Mantido para compatibilidade: envia para o bucket de produtos. */
 export async function uploadImage(file: File): Promise<string> {
-  const { url: base, key: anon } = ensureConfig()
   const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
   const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`
-  const token = (await validToken()) ?? (keyIsPublishable(anon) ? undefined : anon)
-  const res = await fetch(`${base}/storage/v1/object/product-images/${path}`, {
-    method: 'POST',
-    headers: { apikey: anon, ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': file.type || 'image/jpeg' },
-    body: file,
-  })
-  if (!res.ok) {
-    const body = safeJson(await res.text()) as { message?: string } | null
-    throw new Error(body?.message ?? 'Falha ao enviar a imagem.')
-  }
-  return `${base}/storage/v1/object/public/product-images/${path}`
+  if (!supabase) throw new Error('Conexão com o banco não configurada.')
+  const { error } = await supabase.storage.from('product-images').upload(path, file, { contentType: file.type || 'image/jpeg' })
+  if (error) throw new Error(error.message || 'Falha ao enviar a imagem.')
+  return supabase.storage.from('product-images').getPublicUrl(path).data.publicUrl
 }
 
 /* ------------------------------ autenticação ---------------------------- */
