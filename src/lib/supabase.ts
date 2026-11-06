@@ -1,11 +1,97 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Banner, Brand, Category, Neighborhood, Order, Product, Settings } from './types'
 
-const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
+/*
+ * Cliente Supabase leve baseado em fetch (REST/PostgREST + Auth).
+ * Não depende de @supabase/supabase-js, que não faz parte das dependências do projeto.
+ */
+
+const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, '')
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
-export const supabase: SupabaseClient | null = url && key ? createClient(url, key) : null
-export const isSupabaseEnabled = Boolean(supabase)
+export const isSupabaseEnabled = Boolean(url && key)
+
+type Session = { access_token: string; refresh_token: string; expires_at: number; user: { id: string; email?: string } }
+
+const SESSION_KEY = 'mandrake-supabase-session'
+
+function readSession(): Session | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY)
+    return raw ? (JSON.parse(raw) as Session) : null
+  } catch {
+    return null
+  }
+}
+
+function writeSession(session: Session | null) {
+  try {
+    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+    else localStorage.removeItem(SESSION_KEY)
+  } catch {
+    /* ignora */
+  }
+}
+
+function ensureConfig() {
+  if (!url || !key) throw new Error('Conexão com o banco não configurada.')
+  return { url, key }
+}
+
+function authHeaders(): Record<string, string> {
+  const { key: anon } = ensureConfig()
+  const session = readSession()
+  return { apikey: anon, Authorization: `Bearer ${session?.access_token ?? anon}` }
+}
+
+async function request<T>(path: string, init: RequestInit & { params?: Record<string, string> } = {}): Promise<T> {
+  const { url: base } = ensureConfig()
+  const query = init.params ? `?${new URLSearchParams(init.params).toString()}` : ''
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...authHeaders(),
+    ...((init.headers as Record<string, string> | undefined) ?? {}),
+  }
+  if (init.method === 'POST' || init.method === 'PATCH' || init.method === 'DELETE') {
+    headers.Prefer = 'return=representation'
+  }
+  const res = await fetch(`${base}${path}${query}`, { ...init, headers })
+  const text = await res.text()
+  const body = text ? safeJson(text) : null
+  if (!res.ok) {
+    const message = (body as { message?: string; error_description?: string; msg?: string } | null)
+    throw new Error(message?.message ?? message?.error_description ?? message?.msg ?? 'Falha na comunicação com o banco.')
+  }
+  return body as T
+}
+
+function safeJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+/* API mínima compatível com o uso anterior de `supabase` pelos módulos da loja. */
+export const supabase = isSupabaseEnabled
+  ? {
+      rpc: <T,>(fn: string, args: Record<string, unknown> = {}) =>
+        request<T>(`/rest/v1/rpc/${fn}`, { method: 'POST', body: JSON.stringify(args) }),
+      get session() {
+        return readSession()
+      },
+      signOut: async () => {
+        const session = readSession()
+        writeSession(null)
+        if (session?.access_token && url && key) {
+          await fetch(`${url}/auth/v1/logout`, {
+            method: 'POST',
+            headers: { apikey: key, Authorization: `Bearer ${session.access_token}` },
+          }).catch(() => undefined)
+        }
+      },
+    }
+  : null
 
 export type AdminSessionInfo = { userId: string; email: string }
 
@@ -50,42 +136,44 @@ export function mapProduct(row: ProductRow): Product {
 }
 
 export async function fetchCatalog() {
-  const client = db()
+  db()
   const [products, categories, banners, neighborhoods, settings] = await Promise.all([
-    client.from('products').select('*').order('created_at', { ascending: false }),
-    client.from('categories').select('*').order('sort_order'),
-    client.from('banners').select('*').order('sort_order'),
-    client.from('neighborhoods').select('*').order('name'),
-    client.from('settings').select('*').eq('id', 1).maybeSingle(),
+    request<ProductRow[]>('/rest/v1/products', { params: { select: '*', order: 'created_at.desc' } }),
+    request<Record<string, unknown>[]>('/rest/v1/categories', { params: { select: '*', order: 'sort_order.asc' } }),
+    request<Record<string, unknown>[]>('/rest/v1/banners', { params: { select: '*', order: 'sort_order.asc' } }),
+    request<Record<string, unknown>[]>('/rest/v1/neighborhoods', { params: { select: '*', order: 'name.asc' } }),
+    request<Record<string, unknown>[]>('/rest/v1/settings', { params: { select: '*', id: 'eq.1' } }),
   ])
-  const firstError = products.error ?? categories.error ?? banners.error ?? neighborhoods.error ?? settings.error
-  if (firstError) throw new Error(firstError.message)
 
   return {
-    products: (products.data ?? []).map((row) => mapProduct(row as ProductRow)),
-    categories: (categories.data ?? []).map((row: Record<string, unknown>) => ({
+    products: (products ?? []).map((row) => mapProduct(row)),
+    categories: (categories ?? []).map((row) => ({
       id: String(row.id), name: String(row.name), slug: String(row.slug),
       description: String(row.description ?? ''), image: String(row.image ?? ''),
       active: Boolean(row.active), order: Number(row.sort_order ?? 0),
     })) as Category[],
-    banners: (banners.data ?? []).map((row: Record<string, unknown>) => ({
+    banners: (banners ?? []).map((row) => ({
       id: String(row.id), order: Number(row.sort_order ?? 1), eyebrow: String(row.eyebrow ?? ''),
       title: String(row.title ?? ''), description: String(row.description ?? ''),
       ctaLabel: String(row.cta_label ?? ''), ctaLink: String(row.cta_link ?? '/produtos'),
       image: String(row.image ?? ''), active: Boolean(row.active),
     })) as Banner[],
-    neighborhoods: (neighborhoods.data ?? []).map((row: Record<string, unknown>) => ({
+    neighborhoods: (neighborhoods ?? []).map((row) => ({
       id: String(row.id), name: String(row.name), fee: Number(row.fee),
       estimate: String(row.estimate ?? ''), active: Boolean(row.active),
     })) as Neighborhood[],
-    settings: (settings.data?.data ?? {}) as Partial<Settings>,
+    settings: ((settings?.[0] as { data?: Partial<Settings> } | undefined)?.data ?? {}) as Partial<Settings>,
   }
 }
 
 export async function fetchBrands(): Promise<Brand[]> {
-  const { data, error } = await db().from('brands').select('*').order('name')
-  if (error) return []
-  return (data ?? []).map((row: Record<string, unknown>) => ({ id: String(row.id), name: String(row.name), slug: String(row.slug) }))
+  if (!supabase) return []
+  try {
+    const rows = await request<Record<string, unknown>[]>('/rest/v1/brands', { params: { select: '*', order: 'name.asc' } })
+    return (rows ?? []).map((row) => ({ id: String(row.id), name: String(row.name), slug: String(row.slug) }))
+  } catch {
+    return []
+  }
 }
 
 /* -------------------------------- pedidos ------------------------------- */
@@ -137,18 +225,16 @@ export async function placeOrder(payload: {
   paymentMethod: Order['paymentMethod']
   notes?: string
 }): Promise<{ code: string; token: string }> {
-  const { data, error } = await db().rpc('place_order', {
+  const data = await db().rpc<{ code: string; token: string }>('place_order', {
     payload: { ...payload, email: payload.customer?.email ?? '' },
   })
-  if (error) throw new Error(error.message)
-  return data as { code: string; token: string }
+  return data
 }
 
 export async function trackOrder(code: string, token?: string): Promise<Order | null> {
-  const { data, error } = await db().rpc('track_order', { p_code: code, p_token: token ?? null })
-  if (error) throw new Error(error.message)
+  const data = await db().rpc<Record<string, unknown> | null>('track_order', { p_code: code, p_token: token ?? null })
   if (!data) return null
-  const raw = data as Record<string, unknown>
+  const raw = data
   return mapOrder({
     id: String(raw.id), code: String(raw.code), token: String(raw.token), created_at: String(raw.createdAt),
     customer: raw.customer as Order['customer'], address: raw.address as Order['address'], items: raw.items as Order['items'],
@@ -160,10 +246,14 @@ export async function trackOrder(code: string, token?: string): Promise<Order | 
   })
 }
 
+export async function ordersByEmail(email: string): Promise<Order[]> {
+  const rows = await db().rpc<OrderRow[]>('orders_by_email', { p_email: email.trim() })
+  return Array.isArray(rows) ? rows.map((row) => mapOrder(row)) : []
+}
+
 export async function fetchAdminOrders(): Promise<Order[]> {
-  const { data, error } = await db().from('orders').select('*').order('created_at', { ascending: false }).limit(500)
-  if (error) throw new Error(error.message)
-  return (data ?? []).map((row) => mapOrder(row as OrderRow))
+  const rows = await request<OrderRow[]>('/rest/v1/orders', { params: { select: '*', order: 'created_at.desc', limit: '500' } })
+  return (rows ?? []).map((row) => mapOrder(row))
 }
 
 export async function updateOrderRow(id: string, patch: { status?: Order['status']; paymentStatus?: Order['paymentStatus']; adminNote?: string }) {
@@ -171,8 +261,7 @@ export async function updateOrderRow(id: string, patch: { status?: Order['status
   if (patch.status) payload.status = patch.status
   if (patch.paymentStatus) payload.payment_status = patch.paymentStatus
   if (patch.adminNote !== undefined) payload.admin_note = patch.adminNote
-  const { error } = await db().from('orders').update(payload).eq('id', id)
-  if (error) throw new Error(error.message)
+  await request('/rest/v1/orders', { method: 'PATCH', params: { id: `eq.${id}` }, body: JSON.stringify(payload) })
 }
 
 /* ------------------------------- escritas ------------------------------- */
@@ -185,94 +274,130 @@ export async function upsertProduct(product: Product) {
     images: product.images, colors: product.colors, sizes: product.sizes, variants: product.variants,
     tags: product.tags, active: product.active, updated_at: new Date().toISOString(),
   }
-  const { error } = await db().from('products').upsert(row)
-  if (error) throw new Error(error.message)
+  await request('/rest/v1/products', { method: 'POST', params: { on_conflict: 'id' }, body: JSON.stringify(row) })
 }
 
 export async function deleteProductRow(id: string) {
-  const { error } = await db().from('products').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await request('/rest/v1/products', { method: 'DELETE', params: { id: `eq.${id}` } })
 }
 
 export async function upsertCategory(category: Category, index: number) {
-  const { error } = await db().from('categories').upsert({
-    id: category.id, name: category.name, slug: category.slug, description: category.description ?? '',
-    image: category.image ?? '', active: category.active, sort_order: index + 1, updated_at: new Date().toISOString(),
+  await request('/rest/v1/categories', {
+    method: 'POST',
+    params: { on_conflict: 'id' },
+    body: JSON.stringify({
+      id: category.id, name: category.name, slug: category.slug, description: category.description ?? '',
+      image: category.image ?? '', active: category.active, sort_order: index + 1, updated_at: new Date().toISOString(),
+    }),
   })
-  if (error) throw new Error(error.message)
 }
 
 export async function deleteCategoryRow(id: string) {
-  const { error } = await db().from('categories').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await request('/rest/v1/categories', { method: 'DELETE', params: { id: `eq.${id}` } })
 }
 
 export async function upsertBanner(banner: Banner) {
-  const { error } = await db().from('banners').upsert({
-    id: banner.id, sort_order: banner.order, eyebrow: banner.eyebrow, title: banner.title,
-    description: banner.description, cta_label: banner.ctaLabel, cta_link: banner.ctaLink,
-    image: banner.image, active: banner.active, updated_at: new Date().toISOString(),
+  await request('/rest/v1/banners', {
+    method: 'POST',
+    params: { on_conflict: 'id' },
+    body: JSON.stringify({
+      id: banner.id, sort_order: banner.order, eyebrow: banner.eyebrow, title: banner.title,
+      description: banner.description, cta_label: banner.ctaLabel, cta_link: banner.ctaLink,
+      image: banner.image, active: banner.active, updated_at: new Date().toISOString(),
+    }),
   })
-  if (error) throw new Error(error.message)
 }
 
 export async function deleteBannerRow(id: string) {
-  const { error } = await db().from('banners').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await request('/rest/v1/banners', { method: 'DELETE', params: { id: `eq.${id}` } })
 }
 
 export async function upsertNeighborhood(item: Neighborhood) {
-  const { error } = await db().from('neighborhoods').upsert({
-    id: item.id, name: item.name, fee: item.fee, estimate: item.estimate, active: item.active, updated_at: new Date().toISOString(),
+  await request('/rest/v1/neighborhoods', {
+    method: 'POST',
+    params: { on_conflict: 'id' },
+    body: JSON.stringify({
+      id: item.id, name: item.name, fee: item.fee, estimate: item.estimate, active: item.active, updated_at: new Date().toISOString(),
+    }),
   })
-  if (error) throw new Error(error.message)
 }
 
 export async function deleteNeighborhoodRow(id: string) {
-  const { error } = await db().from('neighborhoods').delete().eq('id', id)
-  if (error) throw new Error(error.message)
+  await request('/rest/v1/neighborhoods', { method: 'DELETE', params: { id: `eq.${id}` } })
 }
 
 export async function saveSettingsRow(settings: Settings) {
-  const { error } = await db().from('settings').upsert({ id: 1, data: settings, updated_at: new Date().toISOString() })
-  if (error) throw new Error(error.message)
+  await request('/rest/v1/settings', {
+    method: 'POST',
+    params: { on_conflict: 'id' },
+    body: JSON.stringify({ id: 1, data: settings, updated_at: new Date().toISOString() }),
+  })
 }
 
 export async function uploadImage(file: File): Promise<string> {
-  const client = db()
+  const { url: base, key: anon } = ensureConfig()
   const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
   const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`
-  const { error } = await client.storage.from('product-images').upload(path, file, { cacheControl: '31536000', upsert: false })
-  if (error) throw new Error(error.message)
-  return client.storage.from('product-images').getPublicUrl(path).data.publicUrl
+  const res = await fetch(`${base}/storage/v1/object/product-images/${path}`, {
+    method: 'POST',
+    headers: { apikey: anon, Authorization: `Bearer ${readSession()?.access_token ?? anon}`, 'Content-Type': file.type || 'image/jpeg' },
+    body: file,
+  })
+  if (!res.ok) {
+    const body = safeJson(await res.text()) as { message?: string } | null
+    throw new Error(body?.message ?? 'Falha ao enviar a imagem.')
+  }
+  return `${base}/storage/v1/object/public/product-images/${path}`
 }
 
 /* ------------------------------ autenticação ---------------------------- */
 
 export async function signInAdmin(email: string, password: string): Promise<AdminSessionInfo> {
-  const client = db()
-  const { data, error } = await client.auth.signInWithPassword({ email: email.trim(), password })
-  if (error) throw new Error('E-mail ou senha inválidos.')
-  const { data: isAdmin, error: roleError } = await client.rpc('is_admin')
-  if (roleError) throw new Error(roleError.message)
+  const { url: base, key: anon } = ensureConfig()
+  const res = await fetch(`${base}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { apikey: anon, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email.trim(), password }),
+  })
+  const body = safeJson(await res.text()) as (Session & { error_description?: string; msg?: string }) | null
+  if (!res.ok || !body?.access_token) throw new Error('E-mail ou senha inválidos.')
+  const session: Session = {
+    access_token: body.access_token,
+    refresh_token: body.refresh_token,
+    expires_at: Math.floor(Date.now() / 1000) + Number((body as unknown as { expires_in?: number }).expires_in ?? 3600),
+    user: body.user,
+  }
+  writeSession(session)
+  const isAdmin = await request<boolean>('/rest/v1/rpc/is_admin', { method: 'POST', body: '{}' })
   if (!isAdmin) {
-    await client.auth.signOut()
+    writeSession(null)
     throw new Error('Esta conta não tem acesso ao painel administrativo.')
   }
-  return { userId: data.user?.id ?? '', email: data.user?.email ?? email }
+  return { userId: body.user?.id ?? '', email: body.user?.email ?? email }
 }
 
 export async function restoreAdmin(): Promise<AdminSessionInfo | null> {
-  if (!supabase) return null
-  const { data } = await supabase.auth.getSession()
-  const user = data.session?.user
-  if (!user) return null
-  const { data: isAdmin } = await supabase.rpc('is_admin')
-  if (!isAdmin) return null
-  return { userId: user.id, email: user.email ?? '' }
+  const { key: anon } = ensureConfig()
+  const session = readSession()
+  if (!session?.access_token) return null
+  try {
+    const res = await fetch(`${url}/auth/v1/user`, { headers: { apikey: anon, Authorization: `Bearer ${session.access_token}` } })
+    if (!res.ok) {
+      writeSession(null)
+      return null
+    }
+    const user = (await res.json()) as { id: string; email?: string }
+    const isAdmin = await request<boolean>('/rest/v1/rpc/is_admin', { method: 'POST', body: '{}' })
+    if (!isAdmin) return null
+    return { userId: user.id, email: user.email ?? '' }
+  } catch {
+    return null
+  }
 }
 
 export async function signOutAdmin() {
   if (!supabase) return
-  await supabase.auth.signOut()
+  await supabase.signOut()
 }
+
+void key

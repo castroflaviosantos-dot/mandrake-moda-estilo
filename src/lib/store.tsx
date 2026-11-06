@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react'
-import { defaultSettings, emptyState, withDefaults } from './store-core'
+import { defaultSettings, withDefaults } from './store-core'
 import { loadCatalog, localKeys, message, readLocal, writeLocal } from './store-client'
 import { remote, isSupabaseConfigured, type AdminSessionInfo } from './store-api'
 import { buildDeliveryOptions } from './shipping'
@@ -293,4 +293,3 @@ export function useStore(): StoreContextValue {
 }
 
 export { message }
-export const emptyState = baseEmptyState()
