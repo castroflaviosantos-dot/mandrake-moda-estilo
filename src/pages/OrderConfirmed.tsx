@@ -1,14 +1,23 @@
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Check, MessageCircle } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
 import { OrderDetail } from '@/components/site/OrderStatus'
 import { whatsappLink } from '@/lib/format'
+import type { Order } from '@/lib/types'
 
 export default function OrderConfirmed() {
   const { code } = useParams()
-  const { state } = useStore()
-  const order = state.orders.find((o) => o.code === code)
+  const { state, findOrder, trackOrder } = useStore()
+  const [order, setOrder] = useState<Order | undefined>(() => (code ? findOrder(code) : undefined))
+
+  useEffect(() => {
+    if (!code) return
+    const local = findOrder(code)
+    if (local) setOrder(local)
+    void trackOrder(code).then((remote) => { if (remote) setOrder(remote) })
+  }, [code, findOrder, trackOrder])
 
   if (!order) {
     return (

@@ -18,7 +18,7 @@ export default function AdminCategories() {
     setOpen(true)
   }
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!form.name.trim()) { toast.error('Informe o nome da categoria'); return }
     const slug = form.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -30,7 +30,7 @@ export default function AdminCategories() {
       image: form.image || editing?.image || 'https://images.unsplash.com/photo-1489987707025-afc232f7ea0f?w=800&q=80',
       active: editing?.active ?? true,
     }
-    saveCategory(category)
+    await saveCategory(category)
     toast.success(editing ? 'Categoria atualizada' : 'Categoria criada')
     setOpen(false)
   }
@@ -52,7 +52,7 @@ export default function AdminCategories() {
                   </div>
                   <div className="flex gap-1">
                     <button onClick={() => { setEditing(c); setForm({ name: c.name, description: c.description, image: c.image }); setOpen(true) }} className="grid size-7 place-items-center border border-border hover:border-white/50" aria-label="Editar"><Pencil className="size-3" /></button>
-                    <button onClick={() => { if (count) { toast.error('Não é possível excluir categoria com produtos vinculados'); return } deleteCategory(c.id); toast.success('Categoria excluída') }} className="grid size-7 place-items-center border border-border hover:border-white/50" aria-label="Excluir"><Trash2 className="size-3" /></button>
+                    <button onClick={async () => { if (count) { toast.error('Não é possível excluir categoria com produtos vinculados'); return } await deleteCategory(c.id); toast.success('Categoria excluída') }} className="grid size-7 place-items-center border border-border hover:border-white/50" aria-label="Excluir"><Trash2 className="size-3" /></button>
                   </div>
                 </div>
                 <p className="mt-2 line-clamp-2 text-[11px] text-muted-foreground">{c.description}</p>

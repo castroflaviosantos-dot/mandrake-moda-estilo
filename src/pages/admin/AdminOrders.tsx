@@ -99,7 +99,7 @@ export default function AdminOrders() {
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Alterar status</p>
               <select
                 value={detail.status}
-                onChange={(e) => { updateOrderStatus(detail.id, e.target.value as Order['status']); toast.success('Status atualizado') }}
+                onChange={async (e) => { await updateOrderStatus(detail.id, e.target.value as Order['status']); toast.success('Status atualizado') }}
                 className={adminInput}
               >
                 {statuses.map((s) => <option key={s} value={s}>{labels[s]}</option>)}

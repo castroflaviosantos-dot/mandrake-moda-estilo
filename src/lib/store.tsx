@@ -1,373 +1,297 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import type {
-  Address, Banner, CartItem, Category, Customer, DeliveryMethod, DeliveryOption, Neighborhood,
-  Order, OrderStatus, PaymentMethod, PaymentStatus, Product, StoreSettings, StoreState,
-} from './types'
-import { BANNERS, CATEGORIES, NEIGHBORHOODS, SETTINGS } from './data'
-import { SEED_PRODUCTS } from './data-products'
-import { SEED_ORDERS } from './data-orders'
-import { buildDeliveryOptions, deliveryLabel } from './shipping'
-import { slugify, uid } from './format'
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react'
+import { defaultSettings, emptyState, withDefaults } from './store-core'
+import { loadCatalog, localKeys, message, readLocal, writeLocal } from './store-client'
+import { remote, isSupabaseConfigured, type AdminSessionInfo } from './store-api'
+import { emptyState as baseEmptyState, withDefaults } from './store-core'
+import { buildDeliveryOptions } from './shipping'
+import type { CartItem, Customer, Address, DeliveryMethod, Order, Product, StoreState } from './types'
 
-const STORAGE_KEY = 'mandrake-store-v4'
-const ADMIN_KEY = 'mandrake-admin-session'
-const ADMIN_PASSWORD = 'mandrake2025'
-
-export function createSeedState(): StoreState {
-  return {
-    products: SEED_PRODUCTS.map((p) => ({ ...p })),
-    categories: CATEGORIES.map((c) => ({ ...c })),
-    brands: [...new Set(SEED_PRODUCTS.map((p) => p.brand))].map((name, i) => ({ id: `br-${i + 1}`, name, slug: slugify(name) })),
-    banners: BANNERS.map((b) => ({ ...b })),
-    orders: SEED_ORDERS.map((o) => ({ ...o })),
-    neighborhoods: NEIGHBORHOODS.map((n) => ({ ...n })),
-    settings: { ...SETTINGS, address: { ...SETTINGS.address } },
-    cart: [],
-    customer: null,
-    customerAddress: null,
-    myOrderCodes: [],
-  }
-}
-
-export type NewOrderInput = {
+type PlaceOrderInput = {
   customer: Customer
   address: Address
   deliveryMethod: DeliveryMethod
+  deliveryLabel: string
   deliveryEstimate: string
-  discount: number
-  paymentMethod: PaymentMethod
+  paymentMethod: Order['paymentMethod']
   notes: string
+  subtotal: number
+  discount: number
+  shipping: number
+  total: number
+  items: Order['items']
 }
 
 type StoreContextValue = {
   state: StoreState
-  cartLines: { item: CartItem; product: Product; total: number }[]
+  ready: boolean
+  usingDatabase: boolean
+  syncError: string | null
+  isAdmin: boolean
+  admin: AdminSessionInfo | null
+  authReady: boolean
+  loginAdmin: (email: string, password: string) => Promise<void>
+  logoutAdmin: () => Promise<void>
+  reload: () => Promise<void>
+  cartLines: { item: CartItem; product: Product }[]
   cartCount: number
   subtotal: number
-  discount: number
-  isAdmin: boolean
-  loginAdmin: (password: string) => boolean
-  logoutAdmin: () => void
-  deliveryOptions: (cep: string, neighborhood?: string) => DeliveryOption[]
-  addToCart: (productId: string, size: string, color: string, quantity?: number) => boolean
-  updateCartItem: (key: string, changes: Partial<Pick<CartItem, 'quantity' | 'size' | 'color'>>) => void
-  removeCartItem: (key: string) => void
+  deliveryOptions: ReturnType<typeof buildDeliveryOptions>
+  addToCart: (productId: string, size: string, color: string, quantity?: number) => void
+  updateQuantity: (key: string, quantity: number) => void
+  removeFromCart: (key: string) => void
   clearCart: () => void
-  createOrder: (input: NewOrderInput) => Order
-  findOrder: (code: string) => Order | undefined
-  updateOrder: (id: string, changes: Partial<Order>) => void
-  updateOrderStatus: (id: string, status: OrderStatus) => void
-  markPaid: (id: string) => void
-  saveProduct: (product: Product) => void
-  deleteProduct: (id: string) => void
-  saveCategory: (category: Category) => void
-  deleteCategory: (id: string) => void
-  saveBanner: (banner: Banner) => void
-  deleteBanner: (id: string) => void
-  moveBanner: (id: string, dir: -1 | 1) => void
-  updateSettings: (patch: Partial<StoreSettings>) => void
-  saveNeighborhood: (n: Neighborhood) => void
-  deleteNeighborhood: (id: string) => void
-  saveCustomer: (customer: Customer, address: Address) => void
-  resetDemo: () => void
+  saveCustomer: (customer: Customer) => Promise<void>
+  placeOrder: (input: PlaceOrderInput) => Promise<Order>
+  trackOrder: (code: string, token?: string) => Promise<Order | null>
+  findOrdersByEmail: (email: string) => Promise<Order[]>
+  saveProduct: (product: Product) => Promise<void>
+  deleteProduct: (id: string) => Promise<void>
+  toggleProductActive: (id: string) => Promise<void>
+  saveCategory: (category: StoreState['categories'][number]) => Promise<void>
+  deleteCategory: (id: string) => Promise<void>
+  saveBanner: (banner: StoreState['banners'][number]) => Promise<void>
+  deleteBanner: (id: string) => Promise<void>
+  saveNeighborhood: (item: StoreState['neighborhoods'][number]) => Promise<void>
+  deleteNeighborhood: (id: string) => Promise<void>
+  updateOrderStatus: (id: string, status: Order['status'], paymentStatus?: Order['paymentStatus']) => Promise<void>
+  updateSettings: (patch: Partial<StoreState['settings']>) => Promise<void>
+  uploadImage: (file: File) => Promise<string>
 }
 
 const StoreContext = createContext<StoreContextValue | null>(null)
 
-function loadState(): StoreState {
-  const seed = createSeedState()
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return seed
-    const parsed = JSON.parse(raw) as Partial<StoreState>
-    const banners = Array.isArray(parsed.banners) ? parsed.banners.filter(Boolean) : null
-    return {
-      ...seed,
-      ...parsed,
-      settings: { ...seed.settings, ...(parsed.settings ?? {}), address: { ...seed.settings.address, ...(parsed.settings?.address ?? {}) } },
-      products: parsed.products?.length ? parsed.products.filter(Boolean) : seed.products,
-      categories: parsed.categories?.length ? parsed.categories.filter(Boolean) : seed.categories,
-      banners: banners && banners.length ? banners : seed.banners,
-      brands: parsed.brands?.length ? parsed.brands : seed.brands,
-      neighborhoods: parsed.neighborhoods?.length ? parsed.neighborhoods : seed.neighborhoods,
-    orders: parsed.orders?.length ? parsed.orders.filter(Boolean) : seed.orders,
-      cart: Array.isArray(parsed.cart) ? parsed.cart.filter(Boolean) : [],
-      myOrderCodes: Array.isArray(parsed.myOrderCodes) ? parsed.myOrderCodes : [],
-    }
-  } catch {
-    return seed
-  }
+type Action = { type: 'hydrate'; patch: Partial<StoreState> } | { type: 'patch'; patch: Partial<StoreState> }
+
+function reducer(state: StoreState, action: Action): StoreState {
+  return { ...state, ...action.patch }
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<StoreState>(loadState)
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    try { return localStorage.getItem(ADMIN_KEY) === '1' } catch { return false }
-  })
+  const [state, dispatch] = useReducer(reducer, undefined, () => withDefaults({
+    cart: readLocal<CartItem[]>(localKeys.cart, []),
+    customer: readLocal<Customer | null>(localKeys.customer, null),
+  }))
+  const [ready, setReady] = useState(false)
+  const [usingDatabase, setUsingDatabase] = useState(false)
+  const [syncError, setSyncError] = useState<string | null>(null)
+  const [admin, setAdmin] = useState<AdminSessionInfo | null>(null)
+  const [authReady, setAuthReady] = useState(!isSupabaseConfigured)
+
+  const patch = useCallback((next: Partial<StoreState>) => dispatch({ type: 'patch', patch: next }), [])
+
+  const reload = useCallback(async () => {
+    const result = await loadCatalog()
+    setUsingDatabase(result.remote)
+    setSyncError(result.error)
+    patch(result.patch)
+  }, [patch])
 
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch { /* indefinido */ }
-  }, [state])
+    let alive = true
+    ;(async () => {
+      const result = await loadCatalog()
+      if (!alive) return
+      setUsingDatabase(result.remote)
+      setSyncError(result.error)
+      patch(result.patch)
+      setReady(true)
+    })()
+    return () => { alive = false }
+  }, [patch])
 
-  const cartLines = useMemo(() => {
-    return state.cart.flatMap((item) => {
-      const product = state.products.find((p) => p.id === item.productId)
-      if (!product) return []
-      return [{ item, product, total: product.price * item.quantity }]
-    })
-  }, [state.cart, state.products])
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+    remote.restore()
+      .then((session) => setAdmin(session))
+      .catch(() => setAdmin(null))
+      .finally(() => setAuthReady(true))
+  }, [])
 
-  const cartCount = cartLines.reduce((acc, line) => acc + line.item.quantity, 0)
-  const subtotal = cartLines.reduce((acc, line) => acc + line.total, 0)
-  const discount = useMemo(() => {
-    if (subtotal >= 500) return Math.round(subtotal * 0.05 * 100) / 100
-    return 0
-  }, [subtotal])
+  useEffect(() => { writeLocal(localKeys.cart, state.cart) }, [state.cart])
+  useEffect(() => { writeLocal(localKeys.customer, state.customer) }, [state.customer])
 
-  const deliveryOptions = useCallback(
-    (cep: string, neighborhood?: string) => buildDeliveryOptions(state.settings, { cep, subtotal, neighborhood }, state.neighborhoods ?? []),
-    [state.settings, state.neighborhoods, subtotal],
-  )
+  const cartLines = useMemo(() => state.cart
+    .map((item) => ({ item, product: state.products.find((p) => p.id === item.productId) }))
+    .filter((line): line is { item: CartItem; product: Product } => Boolean(line.product)), [state.cart, state.products])
+
+  const subtotal = useMemo(() => cartLines.reduce((sum, line) => sum + line.product.price * line.item.quantity, 0), [cartLines])
+  const cartCount = useMemo(() => state.cart.reduce((sum, item) => sum + item.quantity, 0), [state.cart])
+
+  const deliveryOptions = useMemo(() => buildDeliveryOptions(
+    state.settings ?? defaultSettings,
+    { cep: state.customerAddress?.cep ?? '', subtotal, neighborhood: state.customerAddress?.neighborhood },
+    state.neighborhoods,
+  ), [state.settings, state.customerAddress, state.neighborhoods, subtotal])
 
   const addToCart = useCallback((productId: string, size: string, color: string, quantity = 1) => {
-    let added = false
-    setState((prev) => {
-      const product = prev.products.find((p) => p.id === productId)
-      const stock = product?.variants.find((v) => v.size === size && v.color === color)?.stock ?? 0
-      if (!product || stock <= 0) return prev
-      const key = `${productId}::${size}::${color}`
-      const existing = prev.cart.find((c) => c.key === key)
-      const nextQty = Math.min(stock, (existing?.quantity ?? 0) + quantity)
-      added = true
-      const cart = existing
-        ? prev.cart.map((c) => (c.key === key ? { ...c, quantity: nextQty } : c))
-        : [...prev.cart, { key, productId, size, color, quantity: nextQty }]
-      return { ...prev, cart }
-    })
-    return added
-  }, [])
+    const key = `${productId}|${size}|${color}`
+    const existing = state.cart.find((item) => item.key === key)
+    const cart = existing
+      ? state.cart.map((item) => item.key === key ? { ...item, quantity: item.quantity + quantity } : item)
+      : [...state.cart, { key, productId, size, color, quantity }]
+    patch({ cart })
+  }, [state.cart, patch])
 
-  const updateCartItem = useCallback((key: string, changes: Partial<Pick<CartItem, 'quantity' | 'size' | 'color'>>) => {
-    setState((prev) => ({
-      ...prev,
-      cart: prev.cart
-        .map((c) => {
-          if (c.key !== key) return c
-          const product = prev.products.find((p) => p.id === c.productId)
-          const size = changes.size ?? c.size
-          const color = changes.color ?? c.color
-          const stock = product?.variants.find((v) => v.size === size && v.color === color)?.stock ?? 0
-          const quantity = Math.max(1, Math.min(stock || 1, changes.quantity ?? c.quantity))
-          return { ...c, size, color, quantity, key: `${c.productId}::${size}::${color}` }
-        })
-        .filter((c) => {
-          const product = prev.products.find((p) => p.id === c.productId)
-          return product ? (product.variants.find((v) => v.size === c.size && v.color === c.color)?.stock ?? 0) > 0 : false
-        }),
-    }))
-  }, [])
+  const updateQuantity = useCallback((key: string, quantity: number) => {
+    patch({ cart: quantity <= 0 ? state.cart.filter((item) => item.key !== key) : state.cart.map((item) => item.key === key ? { ...item, quantity } : item) })
+  }, [state.cart, patch])
 
-  const removeCartItem = useCallback((key: string) => {
-    setState((prev) => ({ ...prev, cart: prev.cart.filter((c) => c.key !== key) }))
-  }, [])
+  const removeFromCart = useCallback((key: string) => patch({ cart: state.cart.filter((item) => item.key !== key) }), [state.cart, patch])
+  const clearCart = useCallback(() => patch({ cart: [] }), [patch])
 
-  const clearCart = useCallback(() => setState((prev) => ({ ...prev, cart: [] })), [])
+  const saveCustomer = useCallback(async (customer: Customer) => {
+    patch({ customer })
+    writeLocal(localKeys.customer, customer)
+  }, [patch])
 
-  const saveCustomer = useCallback((customer: Customer, address: Address) => {
-    setState((prev) => ({ ...prev, customer, customerAddress: address }))
-  }, [])
+  const loginAdmin = useCallback(async (email: string, password: string) => {
+    if (!isSupabaseConfigured) throw new Error('Conexão com o banco não configurada neste ambiente.')
+    const session = await remote.signIn(email, password)
+    setAdmin(session)
+    await reload()
+  }, [reload])
 
-  const findOrder = useCallback(
-    (code: string) => state.orders.find((o) => o.code === code.trim() || o.token === code.trim()),
-    [state.orders],
-  )
+  const logoutAdmin = useCallback(async () => {
+    await remote.signOut().catch(() => undefined)
+    setAdmin(null)
+    patch({ orders: [] })
+  }, [patch])
 
-  const createOrder = useCallback((input: NewOrderInput): Order => {
-    const items = state.cart.flatMap((item) => {
-      const product = state.products.find((p) => p.id === item.productId)
-      if (!product) return []
-      return [{
-        productId: product.id, name: product.name, brand: product.brand, image: product.images[0],
-        size: item.size, color: item.color, price: product.price, quantity: item.quantity,
-      }]
-    })
-    const orderSubtotal = items.reduce((acc, it) => acc + it.price * it.quantity, 0)
-    const options = buildDeliveryOptions(state.settings, { cep: input.address.cep, subtotal: orderSubtotal, neighborhood: input.address.neighborhood }, state.neighborhoods)
-    const shipping = options.find((o) => o.method === input.deliveryMethod)?.price ?? 0
-    const order: Order = {
-      id: uid('ord'),
-      code: String(2600 + state.orders.length),
-      token: uid('tk'),
-      createdAt: new Date().toISOString(),
+  const placeOrder = useCallback(async (input: PlaceOrderInput): Promise<Order> => {
+    if (!usingDatabase) throw new Error('Não foi possível confirmar o pedido: conexão com o banco indisponível.')
+    const result = await remote.place({
       customer: input.customer,
       address: input.address,
-      items,
-      subtotal: orderSubtotal,
+      items: input.items,
+      subtotal: input.subtotal,
       discount: input.discount,
-      shipping,
-      total: Math.max(0, orderSubtotal - input.discount) + shipping,
+      shipping: input.shipping,
+      total: input.total,
       deliveryMethod: input.deliveryMethod,
-      deliveryLabel: deliveryLabel(input.deliveryMethod),
+      deliveryLabel: input.deliveryLabel,
       deliveryEstimate: input.deliveryEstimate,
       paymentMethod: input.paymentMethod,
-      paymentStatus: 'pending' as PaymentStatus,
-      status: 'aguardando_pagamento' as OrderStatus,
       notes: input.notes,
-    }
-    setState((prev) => ({
-      ...prev,
-      products: prev.products.map((product) => {
-        const sold = items.filter((i) => i.productId === product.id)
-        if (!sold.length) return product
-        return {
-          ...product,
-          variants: product.variants.map((v) => {
-            const match = sold.find((i) => i.size === v.size && i.color === v.color)
-            return match ? { ...v, stock: Math.max(0, v.stock - match.quantity) } : v
-          }),
-        }
-      }),
-      cart: [],
-      customer: input.customer,
-      customerAddress: input.address,
-      myOrderCodes: [order.code, ...prev.myOrderCodes.filter((c) => c !== order.code)],
-      orders: [order, ...prev.orders],
-    }))
-    return order
-  }, [state.cart, state.products, state.orders.length, state.settings, state.neighborhoods])
-
-  const updateOrder = useCallback((id: string, changes: Partial<Order>) => {
-    setState((prev) => ({ ...prev, orders: prev.orders.map((o) => (o.id === id ? { ...o, ...changes } : o)) }))
-  }, [])
-
-  const updateOrderStatus = useCallback((id: string, status: OrderStatus) => {
-    setState((prev) => ({
-      ...prev,
-      orders: prev.orders.map((o) => {
-        if (o.id !== id) return o
-        const paid = status === 'pago' || status === 'preparando' || status === 'enviado' || status === 'concluido'
-        return { ...o, status, paymentStatus: paid ? 'approved' : status === 'cancelado' ? o.paymentStatus : o.paymentStatus }
-      }),
-    }))
-  }, [])
-
-  const markPaid = useCallback((id: string) => {
-    setState((prev) => ({
-      ...prev,
-      orders: prev.orders.map((o) => (o.id === id ? { ...o, paymentStatus: 'approved', status: o.status === 'aguardando_pagamento' ? 'pago' : o.status } : o)),
-    }))
-  }, [])
-
-  const loginAdmin = useCallback((password: string) => {
-    const ok = password.trim() === ADMIN_PASSWORD
-    if (ok) {
-      try { localStorage.setItem(ADMIN_KEY, '1') } catch { /* indefinido */ }
-      setIsAdmin(true)
-    }
-    return ok
-  }, [])
-
-  const logoutAdmin = useCallback(() => {
-    try { localStorage.removeItem(ADMIN_KEY) } catch { /* indefinido */ }
-    setIsAdmin(false)
-  }, [])
-
-  const saveProduct = useCallback((product: Product) => {
-    setState((prev) => ({
-      ...prev,
-      products: prev.products.some((p) => p.id === product.id)
-        ? prev.products.map((p) => (p.id === product.id ? product : p))
-        : [{ ...product, id: product.id || uid('prod') }, ...prev.products],
-    }))
-  }, [])
-
-  const deleteProduct = useCallback((id: string) => {
-    setState((prev) => ({ ...prev, products: prev.products.filter((p) => p.id !== id), cart: prev.cart.filter((c) => c.productId !== id) }))
-  }, [])
-
-  const saveCategory = useCallback((category: Category) => {
-    const normalized = { ...category, slug: slugify(category.slug || category.name) || uid('cat') }
-    setState((prev) => ({
-      ...prev,
-      categories: prev.categories.some((c) => c.id === normalized.id)
-        ? prev.categories.map((c) => (c.id === normalized.id ? normalized : c))
-        : [...prev.categories, { ...normalized, id: normalized.id || uid('cat') }],
-    }))
-  }, [])
-
-  const deleteCategory = useCallback((id: string) => {
-    setState((prev) => ({ ...prev, categories: prev.categories.filter((c) => c.id !== id) }))
-  }, [])
-
-  const saveBanner = useCallback((banner: Banner) => {
-    setState((prev) => ({
-      ...prev,
-      banners: prev.banners.some((b) => b.id === banner.id)
-        ? prev.banners.map((b) => (b.id === banner.id ? banner : b))
-        : [...prev.banners, { ...banner, id: banner.id || uid('ban'), order: prev.banners.length + 1 }],
-    }))
-  }, [])
-
-  const deleteBanner = useCallback((id: string) => {
-    setState((prev) => ({ ...prev, banners: prev.banners.filter((b) => b.id !== id) }))
-  }, [])
-
-  const moveBanner = useCallback((id: string, dir: -1 | 1) => {
-    setState((prev) => {
-      const list = [...prev.banners].sort((a, b) => a.order - b.order)
-      const index = list.findIndex((b) => b.id === id)
-      const target = index + dir
-      if (index < 0 || target < 0 || target >= list.length) return prev
-      const a = list[index]
-      const b = list[target]
-      return {
-        ...prev,
-        banners: prev.banners.map((x) => (x.id === a.id ? { ...x, order: b.order } : x.id === b.id ? { ...x, order: a.order } : x)),
-      }
     })
-  }, [])
+    const order = await remote.track(result.code, result.token)
+    if (!order) throw new Error('Pedido registrado, mas não foi possível carregá-lo.')
+    writeLocal(localKeys.codes, [...roleCodes(result.code), result.code])
+    await saveCustomer(input.customer)
+    clearCart()
+    await reload()
+    return order
+  }, [usingDatabase, saveCustomer, clearCart, reload])
 
-  const updateSettings = useCallback((patch: Partial<StoreSettings>) => {
-    setState((prev) => ({ ...prev, settings: { ...prev.settings, ...patch } }))
-  }, [])
+  const trackOrder = useCallback(async (code: string, token?: string) => {
+    if (!usingDatabase) throw new Error('Acompanhamento indisponível sem conexão com o banco.')
+    return remote.track(code, token)
+  }, [usingDatabase])
 
-  const saveNeighborhood = useCallback((n: Neighborhood) => {
-    setState((prev) => ({
-      ...prev,
-      neighborhoods: prev.neighborhoods.some((x) => x.id === n.id)
-        ? prev.neighborhoods.map((x) => (x.id === n.id ? n : x))
-        : [...prev.neighborhoods, { ...n, id: n.id || uid('nb') }],
-    }))
-  }, [])
+  const findOrdersByEmail = useCallback(async (email: string) => {
+    if (!usingDatabase) return []
+    try {
+      return await remote.byEmail(email)
+    } catch {
+      return []
+    }
+  }, [usingDatabase])
 
-  const deleteNeighborhood = useCallback((id: string) => {
-    setState((prev) => ({ ...prev, neighborhoods: prev.neighborhoods.filter((n) => n.id !== id) }))
-  }, [])
+  const saveProduct = useCallback(async (product: Product) => {
+    if (usingDatabase) await remote.saveProduct(product)
+    const exists = state.products.some((p) => p.id === product.id)
+    patch({ products: exists ? state.products.map((p) => p.id === product.id ? product : p) : [product, ...state.products] })
+  }, [usingDatabase, state.products, patch])
 
-  const resetDemo = useCallback(() => {
-    try { localStorage.removeItem(STORAGE_KEY) } catch { /* indefinido */ }
-    setState(createSeedState())
-  }, [])
+  const deleteProduct = useCallback(async (id: string) => {
+    if (usingDatabase) await remote.removeProduct(id)
+    patch({ products: state.products.filter((p) => p.id !== id) })
+  }, [usingDatabase, state.products, patch])
 
-  const value = useMemo<StoreContextValue>(() => ({
-    state, cartLines, cartCount, subtotal, discount, isAdmin, loginAdmin, logoutAdmin,
-    deliveryOptions, addToCart, updateCartItem, removeCartItem, clearCart, createOrder,
-    findOrder, updateOrder, updateOrderStatus, markPaid, saveProduct, deleteProduct,
-    saveCategory, deleteCategory, saveBanner, deleteBanner, moveBanner, updateSettings,
-    saveNeighborhood, deleteNeighborhood, saveCustomer, resetDemo,
-  }), [
-    state, cartLines, cartCount, subtotal, discount, isAdmin, loginAdmin, logoutAdmin,
-    deliveryOptions, addToCart, updateCartItem, removeCartItem, clearCart, createOrder,
-    findOrder, updateOrder, updateOrderStatus, markPaid, saveProduct, deleteProduct,
-    saveCategory, deleteCategory, saveBanner, deleteBanner, moveBanner, updateSettings,
-    saveNeighborhood, deleteNeighborhood, saveCustomer, resetDemo,
-  ])
+  const toggleProductActive = useCallback(async (id: string) => {
+    const product = state.products.find((p) => p.id === id)
+    if (!product) return
+    await saveProduct({ ...product, active: !product.active })
+  }, [state.products, saveProduct])
+
+  const saveCategory = useCallback(async (category: StoreState['categories'][number]) => {
+    const exists = state.categories.some((c) => c.id === category.id)
+    const categories = exists ? state.categories.map((c) => c.id === category.id ? category : c) : [...state.categories, category]
+    if (usingDatabase) await remote.saveCategory(category, categories.findIndex((c) => c.id === category.id))
+    patch({ categories })
+  }, [usingDatabase, state.categories, patch])
+
+  const deleteCategory = useCallback(async (id: string) => {
+    if (usingDatabase) await remote.removeCategory(id)
+    patch({ categories: state.categories.filter((c) => c.id !== id) })
+  }, [usingDatabase, state.categories, patch])
+
+  const saveBanner = useCallback(async (banner: StoreState['banners'][number]) => {
+    if (usingDatabase) await remote.saveBanner(banner)
+    const exists = state.banners.some((b) => b.id === banner.id)
+    patch({ banners: exists ? state.banners.map((b) => b.id === banner.id ? banner : b) : [...state.banners, banner] })
+  }, [usingDatabase, state.banners, patch])
+
+  const deleteBanner = useCallback(async (id: string) => {
+    if (usingDatabase) await remote.removeBanner(id)
+    patch({ banners: state.banners.filter((b) => b.id !== id) })
+  }, [usingDatabase, state.banners, patch])
+
+  const saveNeighborhood = useCallback(async (item: StoreState['neighborhoods'][number]) => {
+    if (usingDatabase) await remote.saveNeighborhood(item)
+    const exists = state.neighborhoods.some((n) => n.id === item.id)
+    patch({ neighborhoods: exists ? state.neighborhoods.map((n) => n.id === item.id ? item : n) : [...state.neighborhoods, item] })
+  }, [usingDatabase, state.neighborhoods, patch])
+
+  const deleteNeighborhood = useCallback(async (id: string) => {
+    if (usingDatabase) await remote.removeNeighborhood(id)
+    patch({ neighborhoods: state.neighborhoods.filter((n) => n.id !== id) })
+  }, [usingDatabase, state.neighborhoods, patch])
+
+  const updateOrderStatus = useCallback(async (id: string, status: Order['status'], paymentStatus?: Order['paymentStatus']) => {
+    if (usingDatabase) await remote.updateOrder(id, { status, paymentStatus })
+    patch({ orders: state.orders.map((o) => o.id === id ? { ...o, status, paymentStatus: paymentStatus ?? o.paymentStatus } : o) })
+  }, [usingDatabase, state.orders, patch])
+
+  const updateSettings = useCallback(async (settingsPatch: Partial<StoreState['settings']>) => {
+    const settings = { ...state.settings, ...settingsPatch }
+    if (usingDatabase) await remote.saveSettings(settings)
+    patch({ settings })
+  }, [usingDatabase, state.settings, patch])
+
+  const uploadImage = useCallback(async (file: File) => {
+    if (!usingDatabase) throw new Error('Envio de imagens disponível apenas com o banco conectado.')
+    return remote.upload(file)
+  }, [usingDatabase])
+
+  const value: StoreContextValue = {
+    state, ready, usingDatabase, syncError, isAdmin: Boolean(admin), admin, authReady,
+    loginAdmin, logoutAdmin, reload,
+    cartLines, cartCount, subtotal, deliveryOptions,
+    addToCart, updateQuantity, removeFromCart, clearCart, saveCustomer,
+    placeOrder, trackOrder, findOrdersByEmail,
+    saveProduct, deleteProduct, toggleProductActive,
+    saveCategory, deleteCategory, saveBanner, deleteBanner,
+    saveNeighborhood, deleteNeighborhood, updateOrderStatus, updateSettings, uploadImage,
+  }
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }
 
-export function useStore() {
+function roleCodes(code: string): string[] {
+  try {
+    const raw = localStorage.getItem(localKeys.codes)
+    const list = raw ? (JSON.parse(raw) as string[]) : []
+    return Array.isArray(list) ? list.filter((c) => c !== code).slice(0, 19) : []
+  } catch {
+    return []
+  }
+}
+
+export function useStore(): StoreContextValue {
   const ctx = useContext(StoreContext)
   if (!ctx) throw new Error('useStore precisa estar dentro de StoreProvider')
   return ctx
 }
+
+export { message }
+export const emptyState = baseEmptyState()

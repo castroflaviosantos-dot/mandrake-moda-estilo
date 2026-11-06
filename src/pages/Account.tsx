@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { History, LogOut, Package, UserRound } from 'lucide-react'
+import { History, Loader2, LogOut, Package, UserRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { useStore } from '@/lib/store'
 import { Button } from '@/components/ui/button'
@@ -11,9 +11,17 @@ import { cn } from '@/lib/utils'
 
 const field = 'h-11 w-full rounded-none border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-white/60'
 
+function mergeOrders(local: Order[], remote: Order[]): Order[] {
+  const map = new Map<string, Order>()
+  for (const order of [...local, ...remote]) map.set(order.id || order.code, order)
+  return [...map.values()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+}
+
 export default function Account() {
-  const { state, saveCustomer } = useStore()
+  const { state, saveCustomer, findOrdersByEmail } = useStore()
   const [email, setEmail] = useState('')
+  const [looking, setLooking] = useState(false)
+  const [remoteOrders, setRemoteOrders] = useState<Order[]>([])
   const [profile, setProfile] = useState({
     name: state.customer?.name ?? '',
     phone: state.customer?.phone ?? '',
@@ -25,7 +33,7 @@ export default function Account() {
 
   const sessionEmail = state.customer?.email?.toLowerCase() ?? ''
   const myOrders = sessionEmail && !sessionOut
-    ? state.orders.filter((o) => o.customer.email.toLowerCase() === sessionEmail)
+    ? mergeOrders(state.orders.filter((o) => o.customer.email.toLowerCase() === sessionEmail), remoteOrders)
     : []
 
   if (!state.customer || sessionOut) {
@@ -37,17 +45,26 @@ export default function Account() {
           <p className="mt-3 text-sm text-muted-foreground">Acesse com o e-mail usado em suas compras para ver pedidos e histórico.</p>
         </div>
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault()
             const clean = email.trim().toLowerCase()
-            const order = state.orders.find((o) => o.customer.email.toLowerCase() === clean)
-            if (!order) {
-              toast.error('Nenhuma compra encontrada para este e-mail. Você pode consultar pelo número do pedido.')
-              return
+            setLooking(true)
+            try {
+              const remote = await findOrdersByEmail(clean)
+              const local = state.orders.filter((o) => o.customer.email.toLowerCase() === clean)
+              const all = mergeOrders(local, remote)
+              if (all.length === 0) {
+                toast.error('Nenhuma compra encontrada para este e-mail. Você pode consultar pelo número do pedido.')
+                return
+              }
+              const latest = all[0]
+              setRemoteOrders(remote)
+              saveCustomer(latest.customer, latest.address)
+              setProfile({ name: latest.customer.name, phone: latest.customer.phone, email: latest.customer.email, cpf: latest.customer.cpf })
+              toast.success(`Bem-vindo de volta, ${latest.customer.name.split(' ')[0]}!`)
+            } finally {
+              setLooking(false)
             }
-            saveCustomer(order.customer, order.address)
-            setProfile({ name: order.customer.name, phone: order.customer.phone, email: order.customer.email, cpf: order.customer.cpf })
-            toast.success(`Bem-vindo de volta, ${order.customer.name.split(' ')[0]}!`)
           }}
           className="mt-8 space-y-4 border border-border bg-card p-5"
         >
@@ -55,7 +72,9 @@ export default function Account() {
             <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">E-mail cadastrado</span>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={field} placeholder="voce@email.com" required />
           </label>
-          <Button type="submit" className="h-11 w-full rounded-sm bg-white text-[11px] font-bold uppercase tracking-[0.16em] text-black hover:bg-white/90">Entrar</Button>
+          <Button type="submit" disabled={looking} className="h-11 w-full rounded-sm bg-white text-[11px] font-bold uppercase tracking-[0.16em] text-black hover:bg-white/90">
+            {looking ? <Loader2 className="size-4 animate-spin" /> : null} Entrar
+          </Button>
           <p className="text-center text-[11px] text-muted-foreground">
             Sem conta? <Link to="/acompanhar" className="text-foreground underline underline-offset-2">Consulte pelo número do pedido</Link>.
           </p>

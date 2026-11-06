@@ -14,7 +14,7 @@ const emptyAddress: Address = {
 }
 
 export default function Checkout() {
-  const { cartLines, state, createOrder, deliveryOptions, subtotal } = useStore()
+  const { cartLines, state, placeOrder, deliveryOptions, subtotal } = useStore()
   const navigate = useNavigate()
 
   const [form, setForm] = useState({
@@ -96,20 +96,26 @@ export default function Checkout() {
     return true
   }
 
-  const submit = () => {
-    if (!validate() || !method) return
+  const submit = async () => {
+    if (!validate() || !method || submitting) return
     setSubmitting(true)
-    const order = createOrder({
-      customer: { name: form.name.trim(), email: form.email.trim(), phone: form.phone, cpf: form.cpf },
-      address,
-      deliveryMethod: method,
-      deliveryEstimate: selected?.days ?? '',
-      discount: Math.max(0, subtotal >= 500 ? Math.round(subtotal * 0.05 * 100) / 100 : 0),
-      paymentMethod: payment,
-      notes: form.notes,
-    })
-    toast.success(`Pedido ${order.code} registrado`)
-    navigate(`/pedido/${order.code}`)
+    try {
+      const order = await placeOrder({
+        customer: { name: form.name.trim(), email: form.email.trim(), phone: form.phone, cpf: form.cpf },
+        address,
+        deliveryMethod: method as DeliveryMethod,
+        deliveryEstimate: selected?.days ?? '',
+        discount: Math.max(0, subtotal >= 500 ? Math.round(subtotal * 0.05 * 100) / 100 : 0),
+        paymentMethod: payment,
+        notes: form.notes,
+      })
+      toast.success(`Pedido ${order.code} registrado`)
+      navigate(`/pedido/${order.code}`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível registrar o pedido.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const deliveryMeta: { method: DeliveryMethod; icon: typeof Truck; title: string; text: string }[] = [
