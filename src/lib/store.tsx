@@ -148,7 +148,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const session = await remote.signIn(email, password)
     setAdmin(session)
     await reload()
-  }, [reload])
+    try {
+      const adminOrders = await remote.orders()
+      patch({ orders: adminOrders })
+    } catch {
+      /* painel segue carregando o restante */
+    }
+  }, [reload, patch])
 
   const logoutAdmin = useCallback(async () => {
     await remote.signOut().catch(() => undefined)
