@@ -16,13 +16,14 @@ export function LoginCard({ onSuccess }: { onSuccess: () => void }) {
   const [busy, setBusy] = useState(false)
 
   const supabaseMode = adminMode === 'supabase'
+  const emailValue = supabaseMode ? email : password
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setBusy(true)
     setError('')
     try {
-      const ok = await loginAdmin(supabaseMode ? email : password, supabaseMode ? password : undefined)
+      const ok = await loginAdmin(emailValue, supabaseMode ? password : undefined)
       if (ok) {
         toast.success('Acesso liberado')
         onSuccess()
@@ -57,21 +58,21 @@ export function LoginCard({ onSuccess }: { onSuccess: () => void }) {
         </div>
       ) : (
         <label className="block">
-          <span className={label}>Senha de acesso</span>
-          <input className={input} value={password} onChange={(e) => { setPassword(e.target.value); setError('') }} type="password" autoFocus required />
+          <span className={label}>Senha de acesso (demonstração)</span>
+          <input className={input} value={password} onChange={(e) => { setPassword(e.target.value); setError('') }} type="password" autoComplete="current-password" autoFocus required />
         </label>
       )}
 
       {error && <p className="mt-2 text-[11px] text-red-400">{error}</p>}
 
-        <Button type="submit" disabled={busy} className="mt-4 h-11 w-full rounded-sm bg-white text-[11px] uppercase tracking-[0.16em] text-black">
+      <Button type="submit" disabled={busy} className="mt-4 h-11 w-full rounded-sm bg-white text-[11px] uppercase tracking-[0.16em] text-black">
         {busy && <Loader2 className="size-4 animate-spin" />} {busy ? 'Entrando…' : 'Entrar no painel'}
       </Button>
 
       <p className="mt-4 border border-border bg-secondary/40 px-3 py-2 text-[10px] leading-relaxed text-muted-foreground">
         {supabaseMode
           ? 'Acesso restrito a contas cadastradas como administrador. Fale com o responsável para liberar um novo acesso.'
-          : 'Modo demonstração: senha mandrake2025. Conecte o Supabase para liberar o acesso por e-mail e senha.'}
+          : 'Este ambiente está sem conexão com o banco (URL e chave não chegaram ao build). Por isso o acesso é apenas pela senha de demonstração.'}
       </p>
       <Link to="/" className="mt-4 flex items-center justify-center gap-1 text-[10px] uppercase tracking-[0.16em] text-muted-foreground hover:text-foreground"><ArrowLeft className="size-3" /> Voltar para a loja</Link>
     </form>

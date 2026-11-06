@@ -5,8 +5,22 @@ import type { Banner, Brand, Category, Neighborhood, Order, Product, Settings } 
  * Não depende de @supabase/supabase-js, que não faz parte das dependências do projeto.
  */
 
-const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.replace(/\/$/, '')
-const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
+const readEnv = (value: unknown): string | undefined => {
+  const raw = typeof value === 'string' ? value.trim().replace(/^["']|["']$/g, '') : ''
+  return raw.length > 0 ? raw : undefined
+}
+
+const serverUrl = readEnv(import.meta.env.VITE_SUPABASE_URL)?.replace(/\/+$/, '')
+const serverKey = readEnv(import.meta.env.VITE_SUPABASE_ANON_KEY)
+
+/* Chaves publicáveis novas (sb_publishable_...) não são JWT: só podem ir no cabeçalho apikey. */
+const keyIsPublishable = (value: string | undefined) => Boolean(value && value.startsWith('sb_publishable_'))
+
+const DEFAULT_URL = ''
+const DEFAULT_KEY = ''
+
+const url = serverUrl ?? readEnv(DEFAULT_URL)?.replace(/\/+$/, '')
+const key = serverKey ?? readEnv(DEFAULT_KEY)
 
 export const isSupabaseEnabled = Boolean(url && key)
 
@@ -51,7 +65,8 @@ function ensureConfig() {
 function authHeaders(): Record<string, string> {
   const { key: anon } = ensureConfig()
   const session = readSession()
-  return { apikey: anon, Authorization: `Bearer ${session?.access_token ?? anon}` }
+  const token = session?.access_token ?? (keyIsPublishable(anon) ? undefined : anon)
+  return token ? { apikey: anon, Authorization: `Bearer ${token}` } : { apikey: anon }
 }
 
 async function request<T>(path: string, init: RequestInit & { params?: Record<string, string> } = {}): Promise<T> {
@@ -374,9 +389,10 @@ export async function uploadImage(file: File): Promise<string> {
   const { url: base, key: anon } = ensureConfig()
   const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
   const path = `${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}.${ext}`
+  const token = readSession()?.access_token ?? (keyIsPublishable(anon) ? undefined : anon)
   const res = await fetch(`${base}/storage/v1/object/product-images/${path}`, {
     method: 'POST',
-    headers: { apikey: anon, Authorization: `Bearer ${readSession()?.access_token ?? anon}`, 'Content-Type': file.type || 'image/jpeg' },
+    headers: { apikey: anon, ...(token ? { Authorization: `Bearer ${token}` } : {}), 'Content-Type': file.type || 'image/jpeg' },
     body: file,
   })
   if (!res.ok) {
