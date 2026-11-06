@@ -66,9 +66,18 @@ export function Header() {
           <Menu className="size-5" />
         </button>
 
-        <Link to="/" className="group flex flex-col leading-none">
-          <span className="font-display text-[26px] tracking-[0.14em] text-foreground transition-opacity group-hover:opacity-80">MANDRAKE</span>
-          <span className="text-[9px] tracking-[0.42em] text-muted-foreground">MODA E ESTILO</span>
+        <Link to="/" className="group flex items-center gap-2.5 leading-none">
+          <img
+            src="/logo-mandrake.png"
+            alt="Mandrake Moda e Estilo"
+            width={40}
+            height={40}
+            className="size-10 shrink-0 rounded-full object-contain ring-1 ring-white/10 transition-opacity group-hover:opacity-85"
+          />
+          <span className="flex flex-col">
+            <span className="font-display text-[24px] tracking-[0.14em] text-foreground transition-opacity group-hover:opacity-80 sm:text-[26px]">MANDRAKE</span>
+            <span className="hidden text-[9px] tracking-[0.42em] text-muted-foreground sm:block">MODA E ESTILO</span>
+          </span>
         </Link>
 
         <nav className="ml-6 hidden items-center gap-6 text-[13px] font-medium lg:flex">
@@ -141,7 +150,10 @@ export function Header() {
       {mobileOpen && (
         <div className="fixed inset-0 z-50 bg-background lg:hidden">
           <div className="flex h-[72px] items-center justify-between border-b border-border px-5">
-            <span className="font-display text-xl tracking-[0.14em]">MANDRAKE</span>
+            <span className="flex items-center gap-2">
+              <img src="/logo-mandrake.png" alt="" width={32} height={32} className="size-8 rounded-full object-contain ring-1 ring-white/10" />
+              <span className="font-display text-xl tracking-[0.14em]">MANDRAKE</span>
+            </span>
             <button onClick={() => setMobileOpen(false)} aria-label="Fechar menu"><X className="size-5" /></button>
           </div>
           <div className="px-5 py-6">
