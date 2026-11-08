@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Check, CreditCard, Loader2, QrCode, Store, Truck } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { OrderSummary } from '@/components/checkout/Summary'
+import { CheckoutSteps } from '@/components/checkout/steps/CheckoutSteps'
 import { Button } from '@/components/ui/button'
 import { brl, maskCep, maskPhone, whatsappLink } from '@/lib/format'
 import type { Address, DeliveryMethod, OrderItem, PaymentMethod } from '@/lib/types'
@@ -20,7 +21,10 @@ export default function Checkout() {
   const [form, setForm] = useState({
     name: '', email: '', phone: '', cpf: '', notes: '',
   })
-  const [address, setAddress] = useState<Address>(emptyAddress)
+  const [address, setAddress] = useState<Address>(() => ({
+    ...emptyAddress,
+    cep: localStorage.getItem('mandrake.cep') ?? '',
+  }))
   const [method, setMethod] = useState<DeliveryMethod | ''>(() => {
     const saved = localStorage.getItem('mandrake.deliveryMethod')
     return saved === 'nacional' || saved === 'regional' || saved === 'retirada' ? saved : ''
@@ -29,6 +33,12 @@ export default function Checkout() {
   const [cepStatus, setCepStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
   const [cepMessage, setCepMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  const savedCep = localStorage.getItem('mandrake.cep') ?? ''
+  useEffect(() => {
+    if (!savedCep) return
+    setAddress((a) => (a.cep ? a : { ...a, cep: savedCep }))
+  }, [savedCep])
 
   const options = useMemo(() => deliveryOptions(address.cep, address.neighborhood), [deliveryOptions, address.cep, address.neighborhood])
   const selected = options.find((o) => o.method === method && o.available !== false)
@@ -148,6 +158,10 @@ export default function Checkout() {
       <div className="border-b border-border pb-5">
         <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Checkout</p>
         <h1 className="mt-1 font-display text-4xl uppercase">Finalizar compra</h1>
+      </div>
+
+      <div className="mt-5">
+        <CheckoutSteps current="checkout" />
       </div>
 
       <div className="mt-5 flex items-start gap-3 border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-200">
