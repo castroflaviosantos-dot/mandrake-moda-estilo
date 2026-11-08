@@ -1,0 +1,1 @@
+[conteúdo gravado na volta 66; o arquivo está no projeto: use read_file se precisar]

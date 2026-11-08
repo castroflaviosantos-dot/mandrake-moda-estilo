@@ -7,6 +7,7 @@ import Home from '@/pages/Home'
 import Catalog from '@/pages/Catalog'
 import ProductPage from '@/pages/ProductPage'
 import Cart from '@/pages/Cart'
+import DeliveryMethodStep from '@/pages/DeliveryMethodStep'
 import Checkout from '@/pages/Checkout'
 import OrderConfirmed from '@/pages/OrderConfirmed'
 import TrackOrder from '@/pages/TrackOrder'
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/ofertas" element={<Catalog mode="ofertas" />} />
             <Route path="/produto/:slug" element={<ProductPage />} />
             <Route path="/carrinho" element={<Cart />} />
+            <Route path="/entrega" element={<DeliveryMethodStep />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/pedido/:code" element={<OrderConfirmed />} />
             <Route path="/acompanhar" element={<TrackOrder />} />

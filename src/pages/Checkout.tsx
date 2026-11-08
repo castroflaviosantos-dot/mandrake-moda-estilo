@@ -6,7 +6,7 @@ import { useStore } from '@/lib/store'
 import { OrderSummary } from '@/components/checkout/Summary'
 import { Button } from '@/components/ui/button'
 import { brl, maskCep, maskPhone, whatsappLink } from '@/lib/format'
-import type { Address, DeliveryMethod, PaymentMethod } from '@/lib/types'
+import type { Address, DeliveryMethod, OrderItem, PaymentMethod } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 const emptyAddress: Address = {
@@ -21,16 +21,30 @@ export default function Checkout() {
     name: '', email: '', phone: '', cpf: '', notes: '',
   })
   const [address, setAddress] = useState<Address>(emptyAddress)
-  const [method, setMethod] = useState<DeliveryMethod | ''>('')
+  const [method, setMethod] = useState<DeliveryMethod | ''>(() => {
+    const saved = localStorage.getItem('mandrake.deliveryMethod')
+    return saved === 'nacional' || saved === 'regional' || saved === 'retirada' ? saved : ''
+  })
   const [payment, setPayment] = useState<PaymentMethod>('pix')
   const [cepStatus, setCepStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
   const [cepMessage, setCepMessage] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const options = useMemo(() => deliveryOptions(address.cep, address.neighborhood), [deliveryOptions, address.cep, address.neighborhood])
-  const selected = options.find((o) => o.method === method)
+  const selected = options.find((o) => o.method === method && o.available !== false)
   const deliveryFee = selected?.price ?? 0
-  const total = Math.max(0, subtotal - Math.max(0, subtotal >= 500 ? subtotal * 0.05 : 0)) + deliveryFee
+  const discount = subtotal >= 500 ? Math.round(subtotal * 0.05 * 100) / 100 : 0
+  const total = Math.max(0, subtotal - discount) + deliveryFee
+  const items: OrderItem[] = cartLines.map(({ item, product, total: lineTotal }) => ({
+    productId: item.productId,
+    name: product.name,
+    brand: product.brand,
+    image: product.images[0] ?? '',
+    price: Math.round((lineTotal / item.quantity) * 100) / 100,
+    quantity: item.quantity,
+    size: item.size,
+    color: item.color,
+  }))
 
   if (!cartLines.length) {
     return (
@@ -104,10 +118,15 @@ export default function Checkout() {
         customer: { name: form.name.trim(), email: form.email.trim(), phone: form.phone, cpf: form.cpf },
         address,
         deliveryMethod: method as DeliveryMethod,
+        deliveryLabel: selected?.label ?? '',
         deliveryEstimate: selected?.days ?? '',
-        discount: Math.max(0, subtotal >= 500 ? Math.round(subtotal * 0.05 * 100) / 100 : 0),
+        discount,
         paymentMethod: payment,
         notes: form.notes,
+        subtotal,
+        shipping: deliveryFee,
+        total,
+        items,
       })
       toast.success(`Pedido ${order.code} registrado`)
       navigate(`/pedido/${order.code}`)
@@ -188,7 +207,10 @@ export default function Checkout() {
                     key={m}
                     type="button"
                     disabled={disabled}
-                    onClick={() => setMethod(m)}
+                    onClick={() => {
+                      setMethod(m)
+                      localStorage.setItem('mandrake.deliveryMethod', m)
+                    }}
                     className={cn(
                       'flex items-start gap-3 border p-4 text-left transition-colors',
                       method === m ? 'border-white bg-white/5' : 'border-border hover:border-white/40',

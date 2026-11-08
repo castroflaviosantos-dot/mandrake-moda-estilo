@@ -3,7 +3,7 @@ import { defaultSettings, withDefaults } from './store-core'
 import { loadCatalog, localKeys, message, readLocal, writeLocal } from './store-client'
 import { remote, isSupabaseConfigured, adminMode, type AdminSessionInfo } from './store-api'
 import { buildDeliveryOptions } from './shipping'
-import type { CartItem, Customer, Address, DeliveryMethod, Order, Product, StoreState } from './types'
+import type { CartItem, Customer, Address, DeliveryMethod, DeliveryOption, Order, OrderItem, Product, StoreState } from './types'
 
 type PlaceOrderInput = {
   customer: Customer
@@ -33,14 +33,23 @@ type StoreContextValue = {
   loginError: string
   logoutAdmin: () => Promise<void>
   reload: () => Promise<void>
-  cartLines: { item: CartItem; product: Product }[]
+  cartLines: { item: CartItem; product: Product; total: number }[]
   cartCount: number
   subtotal: number
-  deliveryOptions: ReturnType<typeof buildDeliveryOptions>
+  discount: number
+  /** 
+   * Entrega disponível na loja: pode ser chamada como `deliveryOptions(cep)`
+   * (páginas do site) ou sem argumentos para a configuração padrão.
+   */
+  deliveryOptions: (cep?: string, neighborhood?: string) => DeliveryOption[]
   addToCart: (productId: string, size: string, color: string, quantity?: number) => void
   updateQuantity: (key: string, quantity: number) => void
   removeFromCart: (key: string) => void
+  /** Atalhos usados pelas páginas do carrinho. */
+  updateCartItem: (key: string, patch: Partial<Pick<CartItem, 'size' | 'color' | 'quantity'>>) => void
+  removeCartItem: (key: string) => void
   clearCart: () => void
+  findOrder: (code: string) => Order | undefined
   saveCustomer: (customer: Customer) => Promise<void>
   placeOrder: (input: PlaceOrderInput) => Promise<Order>
   trackOrder: (code: string, token?: string) => Promise<Order | null>
@@ -52,10 +61,12 @@ type StoreContextValue = {
   deleteCategory: (id: string) => Promise<void>
   saveBanner: (banner: StoreState['banners'][number]) => Promise<void>
   deleteBanner: (id: string) => Promise<void>
+  moveBanner: (id: string, direction: 'up' | 'down') => Promise<void>
   saveNeighborhood: (item: StoreState['neighborhoods'][number]) => Promise<void>
   deleteNeighborhood: (id: string) => Promise<void>
   updateOrderStatus: (id: string, status: Order['status'], paymentStatus?: Order['paymentStatus']) => Promise<void>
   updateSettings: (patch: Partial<StoreState['settings']>) => Promise<void>
+  resetDemo: () => Promise<void>
   uploadImage: (file: File) => Promise<string>
 }
 
@@ -114,14 +125,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const cartLines = useMemo(() => state.cart
     .map((item) => ({ item, product: state.products.find((p) => p.id === item.productId) }))
-    .filter((line): line is { item: CartItem; product: Product } => Boolean(line.product)), [state.cart, state.products])
+    .filter((line): line is { item: CartItem; product: Product } => Boolean(line.product))
+    .map((line) => ({ ...line, total: line.product.price * line.item.quantity })), [state.cart, state.products])
 
-  const subtotal = useMemo(() => cartLines.reduce((sum, line) => sum + line.product.price * line.item.quantity, 0), [cartLines])
+  const subtotal = useMemo(() => cartLines.reduce((sum, line) => sum + line.total, 0), [cartLines])
   const cartCount = useMemo(() => state.cart.reduce((sum, item) => sum + item.quantity, 0), [state.cart])
+  const discount = useMemo(() => (subtotal >= 500 ? Math.round(subtotal * 0.05 * 100) / 100 : 0), [subtotal])
 
-  const deliveryOptions = useMemo(() => buildDeliveryOptions(
+  const deliveryOptions = useCallback((cep?: string, neighborhood?: string): DeliveryOption[] => buildDeliveryOptions(
     state.settings ?? defaultSettings,
-    { cep: state.customerAddress?.cep ?? '', subtotal, neighborhood: state.customerAddress?.neighborhood },
+    {
+      cep: cep ?? state.customerAddress?.cep ?? '',
+      subtotal,
+      neighborhood: neighborhood ?? state.customerAddress?.neighborhood,
+    },
     state.neighborhoods,
   ), [state.settings, state.customerAddress, state.neighborhoods, subtotal])
 
@@ -139,6 +156,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [state.cart, patch])
 
   const removeFromCart = useCallback((key: string) => patch({ cart: state.cart.filter((item) => item.key !== key) }), [state.cart, patch])
+
+  const updateCartItem = useCallback((key: string, changes: Partial<Pick<CartItem, 'size' | 'color' | 'quantity'>>) => {
+    patch({
+      cart: state.cart.map((item) => {
+        if (item.key !== key) return item
+        const next = { ...item, ...changes }
+        if (changes.quantity !== undefined && changes.quantity <= 0) return next
+        return { ...next, key: `${next.productId}|${next.size}|${next.color}`, quantity: Math.max(1, next.quantity) }
+      }).filter((item) => item.quantity > 0),
+    })
+  }, [state.cart, patch])
+
+  const removeCartItem = useCallback((key: string) => removeFromCart(key), [removeFromCart])
+
+  const findOrder = useCallback((code: string) => state.orders.find((o) => o.code === code), [state.orders])
   const clearCart = useCallback(() => patch({ cart: [] }), [patch])
 
   const saveCustomer = useCallback(async (customer: Customer) => {
@@ -259,6 +291,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     patch({ banners: state.banners.filter((b) => b.id !== id) })
   }, [usingDatabase, state.banners, patch])
 
+  const moveBanner = useCallback(async (id: string, direction: 'up' | 'down') => {
+    const list = [...state.banners].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    const index = list.findIndex((b) => b.id === id)
+    const target = direction === 'up' ? index - 1 : index + 1
+    if (index < 0 || target < 0 || target >= list.length) return
+    const a = list[index]
+    const b = list[target]
+    list[index] = { ...b, order: a.order ?? index }
+    list[target] = { ...a, order: b.order ?? target }
+    const banners = list.map((banner, i) => ({ ...banner, order: i }))
+    if (usingDatabase) {
+      await Promise.all(banners.map((banner) => remote.saveBanner(banner).catch(() => undefined)))
+    }
+    patch({ banners })
+  }, [usingDatabase, state.banners, patch])
+
   const saveNeighborhood = useCallback(async (item: StoreState['neighborhoods'][number]) => {
     if (usingDatabase) await remote.saveNeighborhood(item)
     const exists = state.neighborhoods.some((n) => n.id === item.id)
@@ -281,20 +329,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     patch({ settings })
   }, [usingDatabase, state.settings, patch])
 
+  const resetDemo = useCallback(async () => {
+    patch({ cart: [], customer: null, customerAddress: null })
+    writeLocal(localKeys.cart, [])
+    writeLocal(localKeys.customer, null)
+  }, [patch])
+
   const uploadImage = useCallback(async (file: File) => {
     if (!usingDatabase) throw new Error('Envio de imagens disponível apenas com o banco conectado.')
     return remote.upload(file)
   }, [usingDatabase])
 
+  const placeOrderAndRemember = async (input: PlaceOrderInput): Promise<Order> => {
+    const order = await placeOrder(input)
+    patch({ orders: [order, ...state.orders.filter((o) => o.code !== order.code)] })
+    return order
+  }
+
   const value: StoreContextValue = {
     state, ready, usingDatabase, syncError, isAdmin: Boolean(admin), admin, authReady, adminMode,
     loginAdmin, loginError, logoutAdmin, reload,
-    cartLines, cartCount, subtotal, deliveryOptions,
-    addToCart, updateQuantity, removeFromCart, clearCart, saveCustomer,
-    placeOrder, trackOrder, findOrdersByEmail,
+    cartLines, cartCount, subtotal, discount, deliveryOptions,
+    addToCart, updateQuantity, removeFromCart, updateCartItem, removeCartItem, clearCart, saveCustomer, findOrder,
+    placeOrder: placeOrderAndRemember, trackOrder, findOrdersByEmail,
     saveProduct, deleteProduct, toggleProductActive,
-    saveCategory, deleteCategory, saveBanner, deleteBanner,
-    saveNeighborhood, deleteNeighborhood, updateOrderStatus, updateSettings, uploadImage,
+    saveCategory, deleteCategory, saveBanner, deleteBanner, moveBanner,
+    saveNeighborhood, deleteNeighborhood, updateOrderStatus, updateSettings, resetDemo, uploadImage,
   }
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>

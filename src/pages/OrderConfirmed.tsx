@@ -16,7 +16,14 @@ export default function OrderConfirmed() {
     if (!code) return
     const local = findOrder(code)
     if (local) setOrder(local)
-    void trackOrder(code).then((remote) => { if (remote) setOrder(remote) })
+    void trackOrder(code).then((remote) => {
+      if (remote) setOrder(remote)
+      // Sem a confirmação do banco, o pedido salvo na própria sessão ainda aparece
+      else if (!local) {
+        const saved = findOrder(code)
+        if (saved) setOrder(saved)
+      }
+    })
   }, [code, findOrder, trackOrder])
 
   if (!order) {
