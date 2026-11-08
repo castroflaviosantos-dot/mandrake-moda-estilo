@@ -21,14 +21,15 @@ export default function Cart() {
     return quote.reduce((min, opt) => (opt.price < min.price ? opt : min), quote[0])
   }, [quote])
 
+  const digits = cep.replace(/\D/g, '')
+
   const handleQuote = () => {
-    const digits = cep.replace(/\D/g, '')
     if (digits.length !== 8) return
     setQuote(deliveryOptions(digits))
   }
 
   const handleContinue = () => {
-    localStorage.setItem('mandrake.deliveryMethod', cheapest?.method ?? '')
+    if (digits.length === 8) localStorage.setItem('mandrake.cep', cep)
     navigate('/entrega')
   }
 
