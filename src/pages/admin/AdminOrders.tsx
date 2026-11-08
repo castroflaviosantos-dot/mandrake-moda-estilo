@@ -43,7 +43,7 @@ export default function AdminOrders() {
         </div>
         <div className="flex flex-wrap gap-1">
           {(['todos', ...statuses] as const).map((s) => (
-            <button key={s} onClick={() => setFilter(s)} className={cn('border px-2.5 py-1.5 text-[10px] uppercase tracking-wider', filter === s ? 'border-white bg-white text-black' : 'border-border text-muted-foreground hover:text-foreground')}>
+            <button key={s} onClick={() => setFilter(s)} className={cn('border px-2.5 py-1.5 text-[10px] uppercase tracking-wider rounded-full', filter === s ? 'border-white bg-white text-black' : 'border-border text-muted-foreground hover:text-foreground')}>
               {s === 'todos' ? 'Todos' : labels[s]}
             </button>
           ))}

@@ -38,7 +38,7 @@ export default function ProductPage() {
       <div className="container-mandrake py-24 text-center">
         <p className="font-display text-4xl uppercase">Produto não encontrado</p>
         <p className="mt-3 text-sm text-muted-foreground">A peça que você procura pode ter saído do catálogo.</p>
-        <Button asChild className="mt-6 rounded-sm"><Link to="/produtos">Voltar ao catálogo</Link></Button>
+        <Button asChild className="mt-6 rounded-full"><Link to="/produtos">Voltar ao catálogo</Link></Button>
       </div>
     )
   }
@@ -168,7 +168,7 @@ export default function ProductPage() {
                       onClick={() => selectColor(c)}
                       disabled={out}
                       title={c}
-                      className={cn('h-9 rounded-sm border px-3 text-[11px] uppercase tracking-wider transition-colors', color === c ? 'border-white bg-white text-black' : 'border-border hover:border-white/50', out && 'cursor-not-allowed opacity-30')}
+                      className={cn('h-9 rounded-full border px-3 text-[11px] uppercase tracking-wider transition-colors', color === c ? 'border-white bg-white text-black' : 'border-border hover:border-white/50', out && 'cursor-not-allowed opacity-30')}
                     >
                       {c}
                     </button>
@@ -191,7 +191,7 @@ export default function ProductPage() {
                       key={s}
                       onClick={() => { setSize(s); setQty(1) }}
                       disabled={disabled}
-                      className={cn('h-10 min-w-11 border px-3 text-xs font-medium uppercase tracking-wider transition-colors', size === s ? 'border-white bg-white text-black' : 'border-border hover:border-white/60', disabled && 'cursor-not-allowed border-border/50 text-muted-foreground/40 line-through hover:border-border/50')}
+                      className={cn('h-10 min-w-11 rounded-full border px-3 text-xs font-medium uppercase tracking-wider transition-colors', size === s ? 'border-white bg-white text-black' : 'border-border hover:border-white/60', disabled && 'cursor-not-allowed border-border/50 text-muted-foreground/40 line-through hover:border-border/50')}
                     >
                       {s}
                     </button>
@@ -203,18 +203,18 @@ export default function ProductPage() {
 
             <div className="flex items-center gap-4">
               <div className="flex items-center border border-border">
-                <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="grid size-10 place-items-center hover:bg-accent" aria-label="Diminuir"><Minus className="size-3.5" /></button>
+                <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="grid size-8 place-items-center rounded-full hover:bg-accent" aria-label="Diminuir"><Minus className="size-3.5" /></button>
                 <span className="w-8 text-center text-sm">{qty}</span>
-                <button onClick={() => setQty((q) => Math.min(currentStock || 1, q + 1))} className="grid size-10 place-items-center hover:bg-accent" aria-label="Aumentar"><Plus className="size-3.5" /></button>
+                <button onClick={() => setQty((q) => Math.min(currentStock || 1, q + 1))} className="grid size-8 place-items-center rounded-full hover:bg-accent" aria-label="Aumentar"><Plus className="size-3.5" /></button>
               </div>
               <p className="text-[11px] text-muted-foreground">{totalStock > 0 ? 'Pronta entrega' : 'Esgotado'}</p>
             </div>
 
             <div className="grid gap-2">
-              <Button onClick={() => handleAdd(false)} disabled={totalStock === 0} className="h-12 rounded-sm bg-white text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90">
+              <Button onClick={() => handleAdd(false)} disabled={totalStock === 0} className="h-12 bg-white text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90">
                 <ShoppingBag className="size-4" /> Adicionar ao carrinho
               </Button>
-              <Button onClick={() => handleAdd(true)} disabled={totalStock === 0} variant="outline" className="h-12 rounded-sm text-[11px] font-bold uppercase tracking-[0.18em]">
+              <Button onClick={() => handleAdd(true)} disabled={totalStock === 0} variant="outline" className="h-12 text-[11px] font-bold uppercase tracking-[0.18em]">
                 Comprar agora
               </Button>
             </div>
@@ -224,7 +224,7 @@ export default function ProductPage() {
             <p className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em]"><Truck className="size-3.5" /> Calcular frete e prazo</p>
             <div className="flex gap-2">
               <input value={cep} onChange={(e) => setCep(maskCep(e.target.value))} placeholder="00000-000" inputMode="numeric" className="h-10 flex-1 border border-border bg-background px-3 text-sm outline-none focus:border-white/50" aria-label="CEP" />
-              <Button type="submit" variant="secondary" className="h-10 rounded-sm text-[11px] uppercase tracking-[0.14em]" disabled={loadingCep}>
+              <Button type="submit" variant="secondary" className="h-10 text-[11px] uppercase tracking-[0.14em]" disabled={loadingCep}>
                 {loadingCep ? '...' : 'Calcular'}
               </Button>
             </div>

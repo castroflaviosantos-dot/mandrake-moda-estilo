@@ -139,7 +139,7 @@ export function Header() {
               </span>
             )}
           </Link>
-          <Button asChild size="sm" className="ml-2 hidden h-9 gap-2 rounded-sm bg-white px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-black hover:bg-white/90 lg:inline-flex">
+          <Button asChild size="sm" className="ml-2 hidden h-9 gap-2 bg-white px-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-black hover:bg-white/90 lg:inline-flex">
             <a href={whatsappLink(state.settings.whatsapp, 'Olá! Gostaria de falar com a Mandrake.')} target="_blank" rel="noreferrer">
               <MessageCircle className="size-3.5" /> WhatsApp
             </a>
@@ -170,10 +170,10 @@ export function Header() {
               ))}
             </nav>
             <div className="mt-6 grid grid-cols-2 gap-2">
-              <Button asChild variant="outline" className="rounded-sm"><Link to="/conta">Minha conta</Link></Button>
-              <Button asChild className="rounded-sm"><Link to="/carrinho">Carrinho ({cartCount})</Link></Button>
+              <Button asChild variant="outline" className=""><Link to="/conta">Minha conta</Link></Button>
+              <Button asChild className=""><Link to="/carrinho">Carrinho ({cartCount})</Link></Button>
             </div>
-            <Button asChild className="mt-2 w-full rounded-sm bg-white text-black">
+            <Button asChild className="mt-2 w-full bg-white text-black">
               <a href={whatsappLink(state.settings.whatsapp, 'Olá! Vim pelo site.')} target="_blank" rel="noreferrer">Falar no WhatsApp</a>
             </Button>
           </div>

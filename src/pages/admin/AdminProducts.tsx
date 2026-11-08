@@ -85,7 +85,7 @@ export default function AdminProducts() {
 
   return (
     <div>
-      <AdminHeader title="Produtos" subtitle="Catálogo" action={<Button onClick={startNew} size="sm" className="rounded-sm bg-white text-black"><Plus className="size-3.5" /> Novo produto</Button>} />
+      <AdminHeader title="Produtos" subtitle="Catálogo" action={<Button onClick={startNew} size="sm" className="bg-white text-black"><Plus className="size-3.5" /> Novo produto</Button>} />
 
       <Panel>
         <div className="overflow-x-auto">
@@ -140,7 +140,7 @@ export default function AdminProducts() {
           <AdminField label="Imagens do produto" className="sm:col-span-2"><ImageUpload images={form.images} onChange={(images) => setForm({ ...form, images })} onBusyChange={setUploading} /></AdminField>
           <AdminField label="Descrição" className="sm:col-span-2"><textarea rows={3} className="w-full border border-border bg-background p-2 text-sm outline-none focus:border-white/50" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></AdminField>
           <div className="sm:col-span-2">
-            <Button type="submit" disabled={uploading || saving} data-saving={saving ? 'true' : undefined} className="w-full rounded-sm bg-white text-black disabled:opacity-60">
+            <Button type="submit" disabled={uploading || saving} data-saving={saving ? 'true' : undefined} className="w-full bg-white text-black disabled:opacity-60">
               {uploading
                 ? <><Loader2 className="size-3.5 animate-spin" /> Aguarde o envio da imagem…</>
                 : saving

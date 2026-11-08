@@ -40,9 +40,9 @@ export function Footer() {
             Moda urbana, vestuário e marcas originais. Há mais de 5 anos vestindo atitude em Patos de Minas e em todo o Brasil.
           </p>
           <div className="mt-5 flex gap-2">
-            <a href={`https://instagram.com/${s.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" aria-label="Instagram" className="grid size-9 place-items-center border border-border hover:bg-white hover:text-black"><Camera className="size-4" /></a>
-            <a href={whatsappLink(s.whatsapp, 'Olá! Vim pelo site.')} target="_blank" rel="noreferrer" aria-label="WhatsApp" className="grid size-9 place-items-center border border-border hover:bg-white hover:text-black"><MessageCircle className="size-4" /></a>
-            <a href={`tel:+55${s.whatsapp}`} aria-label="Telefone" className="grid size-9 place-items-center border border-border hover:bg-white hover:text-black"><Phone className="size-4" /></a>
+            <a href={`https://instagram.com/${s.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" aria-label="Instagram" className="grid size-9 place-items-center rounded-full border border-border hover:bg-white hover:text-black"><Camera className="size-4" /></a>
+            <a href={whatsappLink(s.whatsapp, 'Olá! Vim pelo site.')} target="_blank" rel="noreferrer" aria-label="WhatsApp" className="grid size-9 place-items-center rounded-full border border-border hover:bg-white hover:text-black"><MessageCircle className="size-4" /></a>
+            <a href={`tel:+55${s.whatsapp}`} aria-label="Telefone" className="grid size-9 place-items-center rounded-full border border-border hover:bg-white hover:text-black"><Phone className="size-4" /></a>
           </div>
         </div>
 

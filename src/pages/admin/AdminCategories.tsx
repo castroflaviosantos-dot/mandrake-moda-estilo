@@ -63,7 +63,7 @@ export default function AdminCategories() {
 
   return (
     <div>
-      <AdminHeader title="Categorias" subtitle="Organização da vitrine" action={<Button size="sm" onClick={startNew} className="rounded-sm bg-white text-black"><Plus className="size-3.5" /> Nova categoria</Button>} />
+      <AdminHeader title="Categorias" subtitle="Organização da vitrine" action={<Button size="sm" onClick={startNew} className="bg-white text-black"><Plus className="size-3.5" /> Nova categoria</Button>} />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {state.categories.map((c) => {
           const count = state.products.filter((p) => p.category === c.slug).length
@@ -108,7 +108,7 @@ export default function AdminCategories() {
               hint="Envie a imagem da categoria · PNG, JPG, WEBP ou AVIF com no máximo 5 MB."
             />
           </AdminField>
-          <Button type="submit" disabled={uploading || saving} className="w-full rounded-sm bg-white text-black disabled:opacity-60">
+          <Button type="submit" disabled={uploading || saving} className="w-full bg-white text-black disabled:opacity-60">
             {uploading ? <><Loader2 className="size-3.5 animate-spin" /> Aguarde o envio da imagem…</> : saving ? <><Loader2 className="size-3.5 animate-spin" /> Salvando…</> : 'Salvar'}
           </Button>
         </form>

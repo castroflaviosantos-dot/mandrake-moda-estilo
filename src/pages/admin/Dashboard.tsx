@@ -123,7 +123,7 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-1 border border-border p-0.5">
           {[7, 14, 30].map((r) => (
-            <button key={r} onClick={() => setRange(r as 7 | 14 | 30)} className={cn('px-3 py-1.5 text-[11px] uppercase tracking-wider', range === r ? 'bg-white text-black' : 'text-muted-foreground')}>
+            <button key={r} onClick={() => setRange(r as 7 | 14 | 30)} className={cn('rounded-full px-3 py-1.5 text-[11px] uppercase tracking-wider transition-colors', range === r ? 'bg-white text-black' : 'text-muted-foreground hover:text-foreground')}>
               {r} dias
             </button>
           ))}

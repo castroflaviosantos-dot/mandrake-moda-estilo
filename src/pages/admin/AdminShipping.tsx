@@ -102,7 +102,7 @@ export default function AdminShipping() {
           <AdminField label="Bairro" className="flex-1 min-w-40"><input className={adminInput} value={newBairro.name} onChange={(e) => setNewBairro({ ...newBairro, name: e.target.value })} placeholder="Centro" /></AdminField>
           <AdminField label="Taxa (R$)" className="w-28"><input className={adminInput} value={newBairro.fee} onChange={(e) => setNewBairro({ ...newBairro, fee: e.target.value.replace(/[^0-9.]/g, '') })} inputMode="decimal" /></AdminField>
           <AdminField label="Prazo" className="w-44"><input className={adminInput} value={newBairro.estimate} onChange={(e) => setNewBairro({ ...newBairro, estimate: e.target.value })} /></AdminField>
-          <Button type="submit" className="h-10 rounded-sm bg-white text-black"><Plus className="size-3.5" /> Adicionar</Button>
+          <Button type="submit" className="h-10 bg-white text-black"><Plus className="size-3.5" /> Adicionar</Button>
         </form>
         <ul className="divide-y divide-border">
           {state.neighborhoods.map((n) => (

@@ -31,7 +31,7 @@ export default function OrderConfirmed() {
       <div className="container-mandrake py-24 text-center">
         <h1 className="font-display text-4xl uppercase">Pedido não encontrado</h1>
         <p className="mt-3 text-sm text-muted-foreground">Consulte o pedido pela área do cliente usando o número e o e-mail cadastrado.</p>
-        <Button asChild className="mt-6 rounded-sm bg-white text-black"><Link to="/conta">Área do cliente</Link></Button>
+        <Button asChild className="mt-6 bg-white text-black"><Link to="/conta">Área do cliente</Link></Button>
       </div>
     )
   }
@@ -50,10 +50,10 @@ export default function OrderConfirmed() {
       <OrderDetail order={order} />
 
       <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-        <Button asChild className="flex-1 rounded-sm bg-white text-[11px] uppercase tracking-[0.16em] text-black hover:bg-white/90">
+        <Button asChild className="flex-1 bg-white text-[11px] uppercase tracking-[0.16em] text-black hover:bg-white/90">
           <Link to={`/acompanhar?codigo=${order.code}`}>Acompanhar pedido</Link>
         </Button>
-        <Button asChild variant="outline" className="flex-1 rounded-sm text-[11px] uppercase tracking-[0.16em]">
+        <Button asChild variant="outline" className="flex-1 text-[11px] uppercase tracking-[0.16em]">
           <a href={whatsappLink(state.settings.whatsapp, `Olá! Acabei de fazer o pedido #${order.code}.`)} target="_blank" rel="noreferrer"><MessageCircle className="size-4" /> Falar com a loja</a>
         </Button>
       </div>

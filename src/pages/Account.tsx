@@ -72,7 +72,7 @@ export default function Account() {
             <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">E-mail cadastrado</span>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={field} placeholder="voce@email.com" required />
           </label>
-          <Button type="submit" disabled={looking} className="h-11 w-full rounded-sm bg-white text-[11px] font-bold uppercase tracking-[0.16em] text-black hover:bg-white/90">
+          <Button type="submit" disabled={looking} className="h-11 w-full bg-white text-[11px] font-bold uppercase tracking-[0.16em] text-black hover:bg-white/90">
             {looking ? <Loader2 className="size-4 animate-spin" /> : null} Entrar
           </Button>
           <p className="text-center text-[11px] text-muted-foreground">
@@ -93,7 +93,7 @@ export default function Account() {
         <Button
           variant="outline"
           size="sm"
-          className="rounded-sm text-[11px] uppercase tracking-[0.14em]"
+          className="text-[11px] uppercase tracking-[0.14em]"
           onClick={() => { setSessionOut(true); toast.success('Sessão encerrada') }}
         >
           <LogOut className="size-3.5" /> Sair
@@ -114,7 +114,7 @@ export default function Account() {
                   </div>
                   <div className="flex items-center gap-2">
                     <StatusBadge status={o.status} />
-                    <Button asChild size="sm" variant="ghost" className="rounded-sm text-[11px] uppercase"><Link to={`/acompanhar?codigo=${o.code}`}>Detalhes</Link></Button>
+                    <Button asChild size="sm" variant="ghost" className="text-[11px] uppercase"><Link to={`/acompanhar?codigo=${o.code}`}>Detalhes</Link></Button>
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3 text-[11px] text-muted-foreground">
@@ -164,7 +164,7 @@ export default function Account() {
               <span className="mb-1.5 block text-[10px] uppercase tracking-[0.14em] text-muted-foreground">E-mail</span>
               <input className={cn(field, 'opacity-60')} value={state.customer!.email} disabled />
             </label>
-            <Button type="submit" className="h-10 w-full rounded-sm bg-white text-[11px] font-bold uppercase tracking-[0.14em] text-black hover:bg-white/90">Salvar alterações</Button>
+            <Button type="submit" className="h-10 w-full bg-white text-[11px] font-bold uppercase tracking-[0.14em] text-black hover:bg-white/90">Salvar alterações</Button>
           </form>
         </aside>
       </div>

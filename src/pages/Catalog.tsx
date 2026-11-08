@@ -72,7 +72,7 @@ export default function Catalog({ mode = 'all' }: { mode?: Mode }) {
         <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Marcas</p>
         <div className="flex flex-wrap gap-1.5">
           {['todas', ...brands].map((b) => (
-            <button key={b} onClick={() => setBrand(b)} className={cn('border px-2.5 py-1 text-[11px] transition-colors', brand === b ? 'border-white bg-white text-black' : 'border-border text-muted-foreground hover:text-foreground')}>
+            <button key={b} onClick={() => setBrand(b)} className={cn('border px-2.5 py-1 text-[11px] transition-colors rounded-full', brand === b ? 'border-white bg-white text-black' : 'border-border text-muted-foreground hover:text-foreground')}>
               {b === 'todas' ? 'Todas' : b}
             </button>
           ))}
@@ -127,7 +127,7 @@ export default function Catalog({ mode = 'all' }: { mode?: Mode }) {
             <div className="border border-border bg-card px-6 py-20 text-center">
               <p className="font-display text-2xl uppercase">Nenhum produto encontrado</p>
               <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">Ajuste os filtros ou fale com a equipe pelo WhatsApp para encontrar o que procura.</p>
-              <Button asChild className="mt-6 rounded-sm"><Link to="/produtos">Ver todo o catálogo</Link></Button>
+              <Button asChild className="mt-6 rounded-full"><Link to="/produtos">Ver todo o catálogo</Link></Button>
             </div>
           )}
         </div>
@@ -140,7 +140,7 @@ export default function Catalog({ mode = 'all' }: { mode?: Mode }) {
             <button onClick={() => setFiltersOpen(false)} aria-label="Fechar"><X className="size-5" /></button>
           </div>
           <div className="p-5">{filters}</div>
-          <div className="px-5"><Button className="w-full rounded-sm" onClick={() => setFiltersOpen(false)}>Aplicar ({products.length})</Button></div>
+          <div className="px-5"><Button className="w-full" onClick={() => setFiltersOpen(false)}>Aplicar ({products.length})</Button></div>
         </div>
       )}
     </div>
