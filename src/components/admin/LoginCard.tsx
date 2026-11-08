@@ -65,7 +65,7 @@ export function LoginCard({ onSuccess }: { onSuccess: () => void }) {
 
       {error && <p className="mt-2 text-[11px] text-red-400">{error}</p>}
 
-      <Button type="submit" disabled={busy} className="mt-4 h-11 w-full rounded-sm bg-white text-[11px] uppercase tracking-[0.16em] text-black">
+      <Button type="submit" disabled={busy} className="mt-4 h-11 w-full bg-white text-[11px] uppercase tracking-[0.16em] text-black">
         {busy && <Loader2 className="size-4 animate-spin" />} {busy ? 'Entrando…' : 'Entrar no painel'}
       </Button>
 

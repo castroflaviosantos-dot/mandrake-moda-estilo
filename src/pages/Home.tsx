@@ -57,10 +57,10 @@ function Hero() {
           </h1>
           <p className="mt-5 max-w-lg text-sm leading-relaxed text-white/75 sm:text-base">{slide.description}</p>
           <div className="mt-8 flex flex-wrap gap-3">
-            <Button asChild size="lg" className="h-12 rounded-sm bg-white px-7 text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90">
+            <Button asChild size="lg" className="h-12 bg-white px-7 text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90">
               <Link to={slide.ctaLink}>{slide.ctaLabel} <ArrowUpRight className="size-4" /></Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="h-12 rounded-sm border-white/30 bg-white/5 px-7 text-[11px] font-bold uppercase tracking-[0.18em] text-white backdrop-blur hover:bg-white hover:text-black">
+            <Button asChild size="lg" variant="outline" className="h-12 border-white/30 bg-white/5 px-7 text-[11px] font-bold uppercase tracking-[0.18em] text-white backdrop-blur hover:bg-white hover:text-black">
               <Link to="/produtos">Ver catálogo</Link>
             </Button>
           </div>
@@ -189,10 +189,10 @@ export default function Home() {
                 Fale com a equipe Mandrake pelo WhatsApp e receba sugestões de looks, informações de tamanhos e novidades antes de todo mundo.
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
-                <Button asChild className="h-11 rounded-sm bg-white px-6 text-[11px] font-bold uppercase tracking-[0.16em] text-black hover:bg-white/90">
+                <Button asChild className="h-11 bg-white px-6 text-[11px] font-bold uppercase tracking-[0.16em] text-black hover:bg-white/90">
                   <a href={whatsappLink(state.settings.whatsapp, 'Olá! Quero ajuda para escolher meu look.')} target="_blank" rel="noreferrer">Falar no WhatsApp</a>
                 </Button>
-                <Button asChild variant="outline" className="h-11 rounded-sm px-6 text-[11px] font-bold uppercase tracking-[0.16em]">
+                <Button asChild variant="outline" className="h-11 px-6 text-[11px] font-bold uppercase tracking-[0.16em]">
                   <Link to="/produtos">Explorar loja</Link>
                 </Button>
               </div>

@@ -61,7 +61,7 @@ export default function Checkout() {
       <div className="container-mandrake py-24 text-center">
         <h1 className="font-display text-4xl uppercase">Nada para finalizar</h1>
         <p className="mt-3 text-sm text-muted-foreground">Adicione peças ao carrinho para seguir ao checkout.</p>
-        <Button asChild className="mt-6 rounded-sm bg-white text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90">
+        <Button asChild className="mt-6 bg-white text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90">
           <Link to="/produtos">Ver produtos</Link>
         </Button>
       </div>
@@ -285,7 +285,7 @@ export default function Checkout() {
 
         <div>
           <OrderSummary deliveryFee={deliveryFee} deliveryEstimate={selected?.days} />
-          <Button onClick={submit} disabled={submitting} className="mt-4 h-12 w-full rounded-sm bg-white text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90">
+          <Button onClick={submit} disabled={submitting} className="mt-4 h-12 w-full bg-white text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90">
             {submitting ? 'Registrando pedido...' : `Finalizar pedido · ${brl(total)}`}
           </Button>
           <a

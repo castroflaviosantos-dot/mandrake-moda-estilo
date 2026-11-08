@@ -72,7 +72,7 @@ export default function DeliveryMethodStep() {
         <ShoppingBag className="size-10 text-muted-foreground" />
         <h1 className="mt-5 font-display text-4xl uppercase">Seu carrinho está vazio</h1>
         <p className="mt-3 max-w-md text-sm text-muted-foreground">Escolha uma peça antes de definir a entrega.</p>
-        <Button asChild className="mt-7 rounded-sm bg-white text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90">
+        <Button asChild className="mt-7 bg-white text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90">
           <Link to="/produtos">Ver produtos</Link>
         </Button>
       </div>
@@ -105,7 +105,7 @@ export default function DeliveryMethodStep() {
                 aria-label="CEP de entrega"
                 className="h-11 flex-1 border border-border bg-background px-3 text-sm outline-none focus:border-white/50"
               />
-              <Button variant="secondary" onClick={handleLookup} disabled={lookup === 'loading'} className="h-11 rounded-sm text-[10px] uppercase tracking-[0.14em]">
+              <Button variant="secondary" onClick={handleLookup} disabled={lookup === 'loading'} className="h-11 text-[10px] uppercase tracking-[0.14em]">
                 {lookup === 'loading' ? <Loader2 className="size-4 animate-spin" /> : 'Calcular'}
               </Button>
             </div>
@@ -178,7 +178,7 @@ export default function DeliveryMethodStep() {
             <Button
               onClick={handleContinue}
               disabled={!selected}
-              className="mt-5 h-12 w-full rounded-sm bg-white text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90"
+              className="mt-5 h-12 w-full bg-white text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90"
             >
               Ir para o checkout <ArrowRight className="size-4" />
             </Button>

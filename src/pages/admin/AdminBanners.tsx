@@ -63,7 +63,7 @@ export default function AdminBanners() {
       <AdminHeader
         title="Banners"
         subtitle="Home — carrossel"
-        action={<Button size="sm" onClick={() => { setEditing(null); setDraftId(newBannerId()); setForm(empty); setOpen(true) }} className="rounded-sm bg-white text-black"><Plus className="size-3.5" /> Novo banner</Button>}
+        action={<Button size="sm" onClick={() => { setEditing(null); setDraftId(newBannerId()); setForm(empty); setOpen(true) }} className="bg-white text-black"><Plus className="size-3.5" /> Novo banner</Button>}
       />
       <p className="mb-4 text-[11px] text-muted-foreground">Os banners são exibidos na ordem abaixo e alternam automaticamente na página inicial.</p>
       <div className="space-y-3">
@@ -109,7 +109,7 @@ export default function AdminBanners() {
               hint="Envie uma imagem de capa · PNG, JPG, WEBP ou AVIF com no máximo 5 MB. Recomendado 1600×700 px."
             />
           </AdminField>
-          <Button type="submit" disabled={uploading || saving} className="w-full rounded-sm bg-white text-black disabled:cursor-not-allowed disabled:opacity-60">
+          <Button type="submit" disabled={uploading || saving} className="w-full bg-white text-black disabled:cursor-not-allowed disabled:opacity-60">
             {uploading ? 'Aguarde o envio da imagem…' : saving ? 'Salvando…' : 'Salvar banner'}
           </Button>
           {uploading && <p className="text-[10px] text-muted-foreground">O salvamento é liberado quando o envio da imagem terminar.</p>}

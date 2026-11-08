@@ -50,7 +50,7 @@ export function ProductCard({ product, className }: { product: Product; classNam
             type="button"
             onClick={quickAdd}
             disabled={!available}
-            className="flex h-9 w-full items-center justify-center gap-2 bg-white text-[10px] font-bold uppercase tracking-[0.16em] text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-9 w-full items-center justify-center gap-2 rounded-full bg-white text-[10px] font-bold uppercase tracking-[0.16em] text-black transition-all duration-200 hover:bg-white/85 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ShoppingBag className="size-3.5" /> Adicionar
           </button>

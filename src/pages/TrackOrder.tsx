@@ -48,7 +48,7 @@ export default function TrackOrder() {
           placeholder="Ex.: MDK-0001"
           className="h-11 flex-1 border border-border bg-background px-3 text-sm outline-none focus:border-white/60"
         />
-        <Button type="submit" disabled={loading} className="h-11 rounded-sm bg-white px-5 text-[11px] uppercase tracking-[0.14em] text-black hover:bg-white/90">
+        <Button type="submit" disabled={loading} className="h-11 bg-white px-5 text-[11px] uppercase tracking-[0.14em] text-black hover:bg-white/90">
           {loading ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />} Buscar
         </Button>
       </form>

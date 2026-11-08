@@ -47,7 +47,7 @@ export default function AdminSettings() {
             <AdminField label="Aviso da barra superior" className="sm:col-span-2"><input className={adminInput} value={form.announcement} onChange={(e) => setForm({ ...form, announcement: e.target.value })} /></AdminField>
           </div>
         </Panel>
-        <div className="lg:col-span-2"><Button type="submit" className="rounded-sm bg-white px-6 text-black">Salvar configurações</Button></div>
+        <div className="lg:col-span-2"><Button type="submit" className="bg-white px-6 text-black">Salvar configurações</Button></div>
       </form>
 
       <Panel title="Pagamentos">
@@ -66,7 +66,7 @@ export default function AdminSettings() {
       <Panel title="Ambiente">
         <div className="flex flex-wrap items-center justify-between gap-3 p-4">
           <p className="max-w-md text-[11px] text-muted-foreground">Restaurar os dados de demonstração (produtos, banners, pedidos e configurações iniciais).</p>
-          <Button variant="outline" size="sm" className="rounded-sm text-[11px] uppercase" onClick={async () => { if (confirm('Restaurar dados de demonstração? Isso sobrescreve os dados atuais da loja.')) { await resetDemo(); toast.success('Demonstração restaurada') } }}>Restaurar demo</Button>
+          <Button variant="outline" size="sm" className="text-[11px] uppercase" onClick={async () => { if (confirm('Restaurar dados de demonstração? Isso sobrescreve os dados atuais da loja.')) { await resetDemo(); toast.success('Demonstração restaurada') } }}>Restaurar demo</Button>
         </div>
       </Panel>
     </div>
