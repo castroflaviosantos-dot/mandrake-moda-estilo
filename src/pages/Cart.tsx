@@ -22,8 +22,14 @@ export default function Cart() {
   }, [quote])
 
   const handleQuote = () => {
-    if (cep.replace(/\D/g, '').length !== 8) return
-    setQuote(deliveryOptions(cep))
+    const digits = cep.replace(/\D/g, '')
+    if (digits.length !== 8) return
+    setQuote(deliveryOptions(digits))
+  }
+
+  const handleContinue = () => {
+    localStorage.setItem('mandrake.deliveryMethod', cheapest?.method ?? '')
+    navigate('/entrega')
   }
 
   if (!cartLines.length) {
@@ -155,7 +161,7 @@ export default function Cart() {
                     <li key={opt.method} className="flex items-start justify-between gap-3 text-xs">
                       <span>
                         <span className="block font-medium">{opt.label}</span>
-                        <span className="text-[11px] text-muted-foreground">{opt.estimate}</span>
+                        <span className="text-[11px] text-muted-foreground">{opt.days}</span>
                       </span>
                       <span className={cn('whitespace-nowrap font-semibold', opt.price === 0 && 'text-emerald-400')}>{opt.price === 0 ? 'Grátis' : brl(opt.price)}</span>
                     </li>
@@ -164,8 +170,8 @@ export default function Cart() {
               )}
             </div>
 
-            <Button onClick={() => navigate('/checkout')} className="mt-5 h-12 w-full rounded-sm bg-white text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90">
-              Finalizar compra <ArrowRight className="size-4" />
+            <Button onClick={handleContinue} className="mt-5 h-12 w-full rounded-sm bg-white text-[11px] font-bold uppercase tracking-[0.18em] text-black hover:bg-white/90">
+              Continuar para entrega <ArrowRight className="size-4" />
             </Button>
             <Link to="/produtos" className="mt-3 block text-center text-[11px] uppercase tracking-[0.14em] text-muted-foreground hover:text-foreground">Continuar comprando</Link>
 
